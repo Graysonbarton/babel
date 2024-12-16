@@ -716,6 +716,9 @@ export interface CallOrNewBase extends NodeBase {
   callee: Expression | Super | Import;
   arguments: Array<Expression | SpreadElement>; // TODO: $ReadOnlyArray,
   typeArguments: TypeParameterInstantiationBase | undefined | null;
+  /**
+   * @deprecated
+   */
   typeParameters?: TypeParameterInstantiationBase | null; // TODO: Not in spec
 }
 
@@ -799,6 +802,10 @@ export interface TaggedTemplateExpression extends NodeBase {
   type: "TaggedTemplateExpression";
   tag: Expression;
   quasi: TemplateLiteral;
+  typeArguments?: TypeParameterInstantiationBase | null; // TODO: Not in spec
+  /**
+   * @deprecated
+   */
   typeParameters?: TypeParameterInstantiationBase | null; // TODO: Not in spec
 }
 
@@ -961,6 +968,9 @@ export interface ClassPrivateProperty extends NodeBase {
   definite?: true;
   readonly?: true;
   override?: true;
+  // For error recovery
+  abstract?: null;
+  accessibility?: null;
   // Flow only
   variance?: FlowVariance | null;
 }
@@ -1124,6 +1134,10 @@ export type JSXSpreadAttribute = NodeAny<"JSXSpreadAttribute">;
 export interface JSXOpeningElement extends NodeBase {
   type: "JSXOpeningElement";
   name: JSXNamespacedName | JSXMemberExpression;
+  typeArguments?: TypeParameterInstantiationBase | null; // TODO: Not in spec,
+  /**
+   * @deprecated
+   */
   typeParameters?: TypeParameterInstantiationBase | null; // TODO: Not in spec,
   attributes: (JSXAttribute | JSXSpreadAttribute)[];
   selfClosing: boolean;
@@ -1378,14 +1392,17 @@ export interface EstreeProperty extends NodeBase {
   variance?: FlowVariance | null;
 }
 
-export interface EstreeMethodDefinition extends NodeBase {
-  type: "MethodDefinition";
+interface EstreeMethodDefinitionBase extends NodeBase {
   static: boolean;
   key: Expression;
   computed: boolean;
-  value: FunctionExpression;
   decorators: Decorator[];
   kind?: "get" | "set" | "method";
+}
+
+export interface EstreeMethodDefinition extends EstreeMethodDefinitionBase {
+  type: "MethodDefinition";
+  value: FunctionExpression;
   variance?: FlowVariance | null;
 }
 
@@ -1404,11 +1421,14 @@ export interface EstreePrivateIdentifier extends NodeBase {
   name: string;
 }
 
-export interface EstreePropertyDefinition extends NodeBase {
-  type: "PropertyDefinition";
+interface EstreePropertyDefinitionBase extends NodeBase {
   static: boolean;
   key: Expression | EstreePrivateIdentifier;
   computed: boolean;
+}
+
+export interface EstreePropertyDefinition extends EstreePropertyDefinitionBase {
+  type: "PropertyDefinition";
   value: Expression;
 }
 
@@ -1537,6 +1557,22 @@ export interface TsIndexSignature
   static?: true;
   type: "TSIndexSignature";
   // Note: parameters.length must be 1.
+}
+
+export interface EstreeTSEmptyBodyFunctionExpression extends NodeBase {
+  type: "TSEmptyBodyFunctionExpression";
+}
+
+export interface EstreeTSAbstractMethodDefinition
+  extends EstreeMethodDefinitionBase {
+  type: "TSAbstractMethodDefinition";
+  value: EstreeTSEmptyBodyFunctionExpression;
+}
+
+export interface EstreeTSAbstractPropertyDefinition
+  extends EstreePropertyDefinitionBase {
+  type: "TSAbstractPropertyDefinition";
+  value: null;
 }
 
 // ================
@@ -1861,7 +1897,11 @@ export interface TsNonNullExpression extends NodeBase {
 export interface TsInstantiationExpression extends NodeBase {
   type: "TSInstantiationExpression";
   expression: Expression;
-  typeParameters: TsTypeParameterInstantiation;
+  typeArguments?: TsTypeParameterInstantiation;
+  /**
+   * @deprecated
+   */
+  typeParameters?: TsTypeParameterInstantiation;
 }
 
 // ================
@@ -1932,6 +1972,9 @@ export type Node =
   | EstreePrivateIdentifier
   | EstreeProperty
   | EstreePropertyDefinition
+  | EstreeTSAbstractMethodDefinition
+  | EstreeTSAbstractPropertyDefinition
+  | EstreeTSEmptyBodyFunctionExpression
   | ExportAllDeclaration
   | ExportDefaultDeclaration
   | ExportDefaultSpecifier
