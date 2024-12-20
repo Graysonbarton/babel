@@ -176,7 +176,9 @@ defineType("BreakStatement", {
 });
 
 defineType("CallExpression", {
-  visitor: ["callee", "arguments", "typeParameters", "typeArguments"],
+  visitor: process.env.BABEL_8_BREAKING
+    ? ["callee", "arguments", "typeArguments"]
+    : ["callee", "arguments", "typeParameters", "typeArguments"],
   builder: ["callee", "arguments"],
   aliases: ["Expression"],
   fields: {
@@ -188,22 +190,35 @@ defineType("CallExpression", {
       "SpreadElement",
       "ArgumentPlaceholder",
     ),
-    ...(!process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-      ? {
+    typeArguments: {
+      validate: process.env.BABEL_8_BREAKING
+        ? assertNodeType(
+            "TypeParameterInstantiation",
+            "TSTypeParameterInstantiation",
+          )
+        : assertNodeType("TypeParameterInstantiation"),
+      optional: true,
+    },
+    ...(process.env.BABEL_8_BREAKING
+      ? {}
+      : {
           optional: {
             validate: assertValueType("boolean"),
             optional: true,
           },
-        }
-      : {}),
-    typeArguments: {
-      validate: assertNodeType("TypeParameterInstantiation"),
-      optional: true,
-    },
-    typeParameters: {
-      validate: assertNodeType("TSTypeParameterInstantiation"),
-      optional: true,
-    },
+          typeParameters: {
+            validate: assertNodeType("TSTypeParameterInstantiation"),
+            optional: true,
+          },
+        }),
+    ...(process.env.BABEL_TYPES_8_BREAKING
+      ? {}
+      : {
+          optional: {
+            validate: assertValueType("boolean"),
+            optional: true,
+          },
+        }),
   },
 });
 
@@ -411,7 +426,14 @@ export const functionDeclarationCommon = () => ({
 
 defineType("FunctionDeclaration", {
   builder: ["id", "params", "body", "generator", "async"],
-  visitor: ["id", "typeParameters", "params", "returnType", "body"],
+  visitor: [
+    "id",
+    "typeParameters",
+    "params",
+    "predicate",
+    "returnType",
+    "body",
+  ],
   fields: {
     ...functionDeclarationCommon(),
     ...functionTypeAnnotationCommon(),
@@ -1295,7 +1317,7 @@ defineType("ArrayPattern", {
 
 defineType("ArrowFunctionExpression", {
   builder: ["params", "body", "async"],
-  visitor: ["typeParameters", "params", "returnType", "body"],
+  visitor: ["typeParameters", "params", "predicate", "returnType", "body"],
   aliases: [
     "Scopable",
     "Function",
@@ -1975,7 +1997,9 @@ defineType(
 );
 
 defineType("TaggedTemplateExpression", {
-  visitor: ["tag", "typeParameters", "quasi"],
+  visitor: process.env.BABEL_8_BREAKING
+    ? ["tag", "typeArguments", "quasi"]
+    : ["tag", "typeParameters", "quasi"],
   builder: ["tag", "quasi"],
   aliases: ["Expression"],
   fields: {
@@ -1985,7 +2009,7 @@ defineType("TaggedTemplateExpression", {
     quasi: {
       validate: assertNodeType("TemplateLiteral"),
     },
-    typeParameters: {
+    [process.env.BABEL_8_BREAKING ? "typeArguments" : "typeParameters"]: {
       validate: assertNodeType(
         "TypeParameterInstantiation",
         "TSTypeParameterInstantiation",
@@ -2185,7 +2209,9 @@ defineType("OptionalMemberExpression", {
 });
 
 defineType("OptionalCallExpression", {
-  visitor: ["callee", "arguments", "typeParameters", "typeArguments"],
+  visitor: process.env.BABEL_8_BREAKING
+    ? ["callee", "arguments", "typeArguments"]
+    : ["callee", "arguments", "typeParameters", "typeArguments"],
   builder: ["callee", "arguments", "optional"],
   aliases: ["Expression"],
   fields: {
@@ -2204,19 +2230,28 @@ defineType("OptionalCallExpression", {
           : chain(assertValueType("boolean"), assertOptionalChainStart()),
     },
     typeArguments: {
-      validate: assertNodeType("TypeParameterInstantiation"),
+      validate: process.env.BABEL_8_BREAKING
+        ? assertNodeType(
+            "TypeParameterInstantiation",
+            "TSTypeParameterInstantiation",
+          )
+        : assertNodeType("TypeParameterInstantiation"),
       optional: true,
     },
-    typeParameters: {
-      validate: assertNodeType("TSTypeParameterInstantiation"),
-      optional: true,
-    },
+    ...(process.env.BABEL_8_BREAKING
+      ? {}
+      : {
+          typeParameters: {
+            validate: assertNodeType("TSTypeParameterInstantiation"),
+            optional: true,
+          },
+        }),
   },
 });
 
 // --- ES2022 ---
 defineType("ClassProperty", {
-  visitor: ["decorators", "key", "typeAnnotation", "value"],
+  visitor: ["decorators", "variance", "key", "typeAnnotation", "value"],
   builder: [
     "key",
     "value",
@@ -2345,7 +2380,7 @@ defineType("ClassAccessorProperty", {
 });
 
 defineType("ClassPrivateProperty", {
-  visitor: ["decorators", "key", "typeAnnotation", "value"],
+  visitor: ["decorators", "variance", "key", "typeAnnotation", "value"],
   builder: ["key", "value", "decorators", "static"],
   aliases: ["Property", "Private"],
   fields: {
