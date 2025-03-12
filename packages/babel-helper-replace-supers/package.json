@@ -15,11 +15,11 @@
   "main": "./lib/index.js",
   "dependencies": {
     "@babel/helper-member-expression-to-functions": "workspace:^",
-    "@babel/helper-optimise-call-expression": "workspace:^",
+    "@babel/helper-optimise-call-expression": "7.0.0",
     "@babel/traverse": "workspace:^"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^"
+    "@babel/core": "7.26.10"
   },
   "peerDependencies": {
     "@babel/core": "^7.0.0"
