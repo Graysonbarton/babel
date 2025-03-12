@@ -44,7 +44,7 @@
     "semver": "condition:BABEL_8_BREAKING ? ^7.3.4 : ^6.3.1"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
+    "@babel/core": "7.26.10",
     "@types/eslint": "^8.56.2",
     "@types/estree": "^1.0.5",
     "@typescript-eslint/scope-manager": "^6.19.0",
