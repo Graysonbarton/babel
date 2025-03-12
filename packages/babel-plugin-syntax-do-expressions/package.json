@@ -22,7 +22,7 @@
     "@babel/core": "^7.0.0-0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^"
+    "@babel/core": "7.26.10"
   },
   "homepage": "https://babel.dev/docs/en/next/babel-plugin-syntax-do-expressions",
   "engines": {
