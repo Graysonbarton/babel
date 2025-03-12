@@ -18,14 +18,14 @@
   ],
   "dependencies": {
     "@babel/helper-compilation-targets": "workspace:^",
-    "@babel/helper-plugin-utils": "workspace:^",
-    "@babel/traverse": "condition:BABEL_8_BREAKING ? : workspace:^"
+    "@babel/helper-plugin-utils": "7.0.0",
+    "@babel/traverse": "7.0.0"
   },
   "peerDependencies": {
     "@babel/core": "^7.0.0-0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
+    "@babel/core": "7.26.10",
     "@babel/helper-plugin-test-runner": "workspace:^"
   },
   "engines": {
