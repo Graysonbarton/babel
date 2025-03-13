@@ -22,11 +22,11 @@
     "@babel/core": "^7.0.0-0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
-    "@babel/helper-plugin-test-runner": "workspace:^",
+    "@babel/core": "7.26.10",
+    "@babel/helper-plugin-test-runner": "7.0.0",
     "@babel/runtime": "workspace:^",
-    "@babel/runtime-corejs2": "^7.24.0",
-    "@babel/runtime-corejs3": "workspace:^"
+    "@babel/runtime-corejs2": "^7.26.10",
+    "@babel/runtime-corejs3": "7.26.10"
   },
   "homepage": "https://babel.dev/docs/en/next/babel-plugin-transform-typeof-symbol",
   "engines": {
