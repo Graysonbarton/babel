@@ -28,8 +28,8 @@
     "@babel/helper-validator-identifier": "workspace:^"
   },
   "devDependencies": {
-    "@babel/generator": "workspace:^",
-    "@babel/parser": "workspace:^",
+    "@babel/generator": "7.0.0",
+    "@babel/parser": "7.0.0",
     "glob": "^7.2.0"
   },
   "engines": {
