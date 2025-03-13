@@ -18,7 +18,7 @@
     "node": ">=6.9.0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^"
+    "@babel/core": "7.26.10"
   },
   "peerDependencies": {
     "@babel/core": "^7.0.0"
