@@ -19,15 +19,15 @@
   "dependencies": {
     "@babel/helper-plugin-utils": "workspace:^",
     "@babel/helper-skip-transparent-expression-wrappers": "workspace:^",
-    "@babel/plugin-syntax-optional-chaining-assign": "workspace:^",
+    "@babel/plugin-syntax-optional-chaining-assign": "7.23.0",
     "@babel/plugin-transform-optional-chaining": "workspace:^"
   },
   "peerDependencies": {
     "@babel/core": "^7.22.5"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
-    "@babel/helper-plugin-test-runner": "workspace:^"
+    "@babel/core": "7.26.10",
+    "@babel/helper-plugin-test-runner": "7.0.0"
   },
   "engines": {
     "node": ">=6.9.0"
