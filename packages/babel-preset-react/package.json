@@ -21,14 +21,14 @@
     "@babel/plugin-transform-react-display-name": "workspace:^",
     "@babel/plugin-transform-react-jsx": "workspace:^",
     "@babel/plugin-transform-react-jsx-development": "workspace:^",
-    "@babel/plugin-transform-react-pure-annotations": "workspace:^"
+    "@babel/plugin-transform-react-pure-annotations": "7.10.0"
   },
   "peerDependencies": {
     "@babel/core": "^7.0.0-0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
-    "@babel/helper-plugin-test-runner": "workspace:^"
+    "@babel/core": "7.26.10",
+    "@babel/helper-plugin-test-runner": "7.0.0"
   },
   "engines": {
     "node": ">=6.9.0"
