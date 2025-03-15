@@ -26,14 +26,14 @@
     "@babel/helper-module-imports": "workspace:^",
     "@babel/helper-plugin-utils": "workspace:^",
     "@babel/helper-validator-option": "workspace:^",
-    "@babel/plugin-syntax-record-and-tuple": "workspace:^"
+    "@babel/plugin-syntax-record-and-tuple": "7.9.0"
   },
   "peerDependencies": {
     "@babel/core": "^7.12.0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
-    "@babel/helper-plugin-test-runner": "workspace:^"
+    "@babel/core": "7.26.10",
+    "@babel/helper-plugin-test-runner": "7.0.0"
   },
   "engines": {
     "node": ">=6.9.0"
