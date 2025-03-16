@@ -34,9 +34,9 @@
     "@babel/core": "^7.0.0-0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
+    "@babel/core": "7.26.10",
     "@babel/helper-transform-fixture-test-runner": "workspace:^",
-    "@babel/preset-env": "workspace:^",
+    "@babel/preset-env": "7.0.0",
     "@babel/preset-react": "workspace:^",
     "@babel/runtime": "workspace:^",
     "@types/v8flags": "^3.1.1"
