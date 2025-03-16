@@ -16,10 +16,10 @@
   "main": "./lib/index.js",
   "dependencies": {
     "@babel/traverse": "workspace:^",
-    "@babel/types": "workspace:^"
+    "@babel/types": "7.0.0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^"
+    "@babel/core": "7.26.10"
   },
   "engines": {
     "node": ">=6.9.0"
