@@ -34,7 +34,7 @@
     "@babel/types": "workspace:^"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^"
+    "@babel/core": "7.26.10"
   },
   "type": "module",
   "conditions": {
