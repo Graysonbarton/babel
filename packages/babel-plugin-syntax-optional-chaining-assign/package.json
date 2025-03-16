@@ -24,7 +24,7 @@
     "@babel/core": "^7.0.0-0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^"
+    "@babel/core": "7.26.10"
   },
   "engines": {
     "node": ">=6.9.0"
