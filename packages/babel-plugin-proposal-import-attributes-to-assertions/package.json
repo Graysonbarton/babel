@@ -30,14 +30,14 @@
   ],
   "dependencies": {
     "@babel/helper-plugin-utils": "workspace:^",
-    "@babel/plugin-syntax-import-attributes": "workspace:^"
+    "@babel/plugin-syntax-import-attributes": "7.22.0"
   },
   "peerDependencies": {
     "@babel/core": "^7.22.0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
-    "@babel/helper-plugin-test-runner": "workspace:^"
+    "@babel/core": "7.26.10",
+    "@babel/helper-plugin-test-runner": "7.0.0"
   },
   "engines": {
     "node": ">=6.9.0"
