@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@babel/helper-module-imports": "workspace:^",
-    "@babel/helper-plugin-utils": "workspace:^",
+    "@babel/helper-plugin-utils": "7.0.0",
     "babel-plugin-polyfill-corejs2": "condition:BABEL_8_BREAKING ? : ^0.4.10 (peer:@babel/core)",
     "babel-plugin-polyfill-corejs3": "condition:BABEL_8_BREAKING ? : ^0.10.6 (peer:@babel/core)",
     "babel-plugin-polyfill-regenerator": "condition:BABEL_8_BREAKING ? : ^0.6.1 (peer:@babel/core)",
@@ -31,12 +31,12 @@
     "@babel/core": "^7.0.0-0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
+    "@babel/core": "7.26.10",
     "@babel/helper-plugin-test-runner": "workspace:^",
-    "@babel/helpers": "workspace:^",
-    "@babel/preset-env": "workspace:^",
+    "@babel/helpers": "7.26.10",
+    "@babel/preset-env": "7.0.0",
     "@babel/runtime": "workspace:^",
-    "@babel/runtime-corejs3": "workspace:^",
+    "@babel/runtime-corejs3": "7.26.10",
     "babel-plugin-polyfill-corejs3": "^0.10.6",
     "make-dir": "condition:BABEL_8_BREAKING ? : ^2.1.0"
   },
