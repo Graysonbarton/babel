@@ -26,9 +26,9 @@
     "@babel/core": "^7.0.0-0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
+    "@babel/core": "7.26.10",
     "@babel/plugin-transform-arrow-functions": "workspace:^",
-    "@babel/plugin-transform-modules-commonjs": "workspace:^",
+    "@babel/plugin-transform-modules-commonjs": "7.0.0",
     "browserify": "^16.5.2"
   },
   "homepage": "https://babel.dev/docs/en/next/babel-register",
