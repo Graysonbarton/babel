@@ -20,16 +20,16 @@
     "@babel/helper-annotate-as-pure": "workspace:^",
     "@babel/helper-create-class-features-plugin": "workspace:^",
     "@babel/helper-plugin-utils": "workspace:^",
-    "@babel/helper-skip-transparent-expression-wrappers": "workspace:^",
-    "@babel/plugin-syntax-typescript": "workspace:^"
+    "@babel/helper-skip-transparent-expression-wrappers": "7.11.0",
+    "@babel/plugin-syntax-typescript": "7.0.0"
   },
   "peerDependencies": {
     "@babel/core": "^7.0.0-0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
-    "@babel/helper-plugin-test-runner": "workspace:^",
-    "@babel/traverse": "workspace:^",
+    "@babel/core": "7.26.10",
+    "@babel/helper-plugin-test-runner": "7.0.0",
+    "@babel/traverse": "7.0.0",
     "@babel/types": "workspace:^"
   },
   "homepage": "https://babel.dev/docs/en/next/babel-plugin-transform-typescript",
