@@ -32,7 +32,7 @@
     "semver": "condition:BABEL_8_BREAKING ? ^7.3.4 : ^6.3.1"
   },
   "devDependencies": {
-    "@babel/helper-plugin-test-runner": "workspace:^",
+    "@babel/helper-plugin-test-runner": "7.0.0",
     "@types/lru-cache": "^5.1.1",
     "@types/semver": "^5.5.0"
   },
