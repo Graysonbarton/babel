@@ -15,8 +15,8 @@
   "main": "./lib/index.js",
   "dependencies": {
     "@babel/helper-annotate-as-pure": "workspace:^",
-    "@babel/helper-compilation-targets": "workspace:^",
-    "@babel/helper-plugin-utils": "workspace:^",
+    "@babel/helper-compilation-targets": "7.8.0",
+    "@babel/helper-plugin-utils": "7.0.0",
     "@babel/helper-replace-supers": "workspace:^",
     "@babel/traverse": "workspace:^",
     "globals": "condition:BABEL_8_BREAKING ? ^15.9.0 : ^11.1.0"
@@ -28,8 +28,8 @@
     "@babel/core": "^7.0.0-0"
   },
   "devDependencies": {
-    "@babel/core": "workspace:^",
-    "@babel/helper-plugin-test-runner": "workspace:^"
+    "@babel/core": "7.26.10",
+    "@babel/helper-plugin-test-runner": "7.0.0"
   },
   "engines": {
     "node": ">=6.9.0"
