@@ -3,9 +3,9 @@
  * when found, before invoking the "real" _babel-node(1) executable.
  */
 
-import path from "path";
-import child_process from "child_process";
-import { fileURLToPath } from "url";
+import path from "node:path";
+import child_process from "node:child_process";
+import { fileURLToPath } from "node:url";
 import getV8FlagsRaw from "v8flags";
 
 import { splitArgs, nodeFlagsWithValue } from "./split-args.ts";
@@ -52,133 +52,86 @@ const babelNodePath = path.join(
 );
 
 (async () => {
-  if (process.env.BABEL_8_BREAKING) {
-    const babelOptions = new Set([]);
-    const babelOptionsWithValue = new Set([]);
-    for (const option of program.options) {
-      const hasValue = option.flags.includes("[");
-      if (option.short) {
-        babelOptions.add(option.short);
-        if (hasValue) babelOptionsWithValue.add(option.short);
-      }
-      if (option.long) {
-        babelOptions.add(option.long);
-        if (hasValue) babelOptionsWithValue.add(option.long);
-      }
+  const babelOptions = new Set<string>([]);
+  const babelOptionsWithValue = new Set<string>([]);
+  for (const option of program.options) {
+    const hasValue = option.flags.includes("[");
+    if (option.short) {
+      babelOptions.add(option.short);
+      if (hasValue) babelOptionsWithValue.add(option.short);
     }
-
-    const { programArgs, fileName, userArgs, explicitSeparator } = splitArgs(
-      process.argv.slice(2),
-      babelOptionsWithValue,
-    );
-
-    const babelArgs: string[] = [];
-    const nodeArgs: string[] = [];
-
-    for (let i = 0; i < programArgs.length; i++) {
-      const arg = programArgs[i];
-      const list = babelOptions.has(arg.split("=")[0]) ? babelArgs : nodeArgs;
-      list.push(arg);
-      if (i + 1 < programArgs.length && programArgs[i + 1][0] !== "-") {
-        list.push(programArgs[++i]);
-      }
+    if (option.long) {
+      babelOptions.add(option.long);
+      if (hasValue) babelOptionsWithValue.add(option.long);
     }
+  }
 
-    if (!explicitSeparator) {
-      const isV8flag = await getV8Flags();
+  const { programArgs, fileName, userArgs, explicitSeparator } = splitArgs(
+    process.argv.slice(2),
+    babelOptionsWithValue,
+  );
 
-      const ambiguousArgsNames: string[] = [];
-      const ambiguousArgs: string[] = [];
-      let unambiguousArgs: string[] | null = null;
-      for (let i = 0; i < userArgs.length; i++) {
-        const [arg, value] = userArgs[i].split("=");
-        if (babelOptions.has(arg) || isV8flag(arg)) {
-          unambiguousArgs ??= userArgs.slice(0, i);
-          ambiguousArgsNames.push(arg);
-          ambiguousArgs.push(userArgs[i]);
-          if (
-            value === undefined &&
-            (babelOptionsWithValue.has(arg) || nodeFlagsWithValue.has(arg)) &&
-            i + 1 < userArgs.length
-          ) {
-            ambiguousArgs.push(userArgs[++i]);
-          }
-        } else {
-          unambiguousArgs?.push(userArgs[i]);
-        }
-      }
-      if (ambiguousArgsNames.length > 0) {
-        const them = ambiguousArgsNames.length === 1 ? "it" : "them";
-        const they = ambiguousArgsNames.length === 1 ? "it" : "they";
-        const are = ambiguousArgsNames.length === 1 ? "is" : "are";
-        console.warn(
-          `Warning: ${ambiguousArgsNames.join(", ")} ${are} a valid option for Babel or Node.js, ` +
-            `but ${they} ${are} defined after the script name. Up to Babel 7 ${they} would have ` +
-            `been passed to Babel, while now ${they} ${are} passed to the script itself.\n` +
-            `  If the intention is to pass ${them} to Babel, move ${them} before the filename:\n` +
-            `    babel-node ${programArgs.join(" ")} ${ambiguousArgs.join(" ")} ${fileName} ${unambiguousArgs.join(" ")}\n` +
-            `  If passing ${them} to the script is intended, you can silence this warning by explicitly ` +
-            `using the -- separator before the script name:\n` +
-            `    babel-node ${programArgs.join(" ")} -- ${fileName} ${userArgs.join(" ")}`,
-        );
-      }
+  const babelArgs: string[] = [];
+  const nodeArgs: string[] = [];
+
+  for (let i = 0; i < programArgs.length; i++) {
+    const arg = programArgs[i];
+    const list = babelOptions.has(arg.split("=")[0]) ? babelArgs : nodeArgs;
+    list.push(arg);
+    if (i + 1 < programArgs.length && !programArgs[i + 1].startsWith("-")) {
+      list.push(programArgs[++i]);
     }
+  }
 
-    await spawn([
-      ...nodeArgs,
-      "--",
-      babelNodePath,
-      ...babelArgs,
-      "--",
-      fileName,
-      ...userArgs,
-    ]);
-  } else {
-    const args = [babelNodePath];
-
-    let babelArgs = process.argv.slice(2);
-    let userArgs: string[];
-
-    // separate node arguments from script arguments
-    const argSeparator = babelArgs.indexOf("--");
-    if (argSeparator > -1) {
-      userArgs = babelArgs.slice(argSeparator); // including the  --
-      babelArgs = babelArgs.slice(0, argSeparator);
-    }
-
+  if (!explicitSeparator) {
     const isV8flag = await getV8Flags();
 
-    for (let i = 0; i < babelArgs.length; i++) {
-      const arg = babelArgs[i];
-      const flag = arg.split("=")[0];
-
-      if (flag === "-d") {
-        args.unshift("--debug");
-        continue;
-      } else if (flag === "-gc") {
-        args.unshift("--expose-gc");
-        continue;
-      } else if (flag === "-r" || flag === "--require") {
-        args.push(flag);
-        args.push(babelArgs[++i]);
-      } else if (
-        flag === "debug" || // node debug foo.js
-        flag === "inspect" ||
-        isV8flag(flag)
-      ) {
-        args.unshift(arg);
+    const ambiguousArgsNames: string[] = [];
+    const ambiguousArgs: string[] = [];
+    let unambiguousArgs: string[] | null = null;
+    for (let i = 0; i < userArgs.length; i++) {
+      const [arg, value] = userArgs[i].split("=");
+      if (babelOptions.has(arg) || isV8flag(arg)) {
+        unambiguousArgs ??= userArgs.slice(0, i);
+        ambiguousArgsNames.push(arg);
+        ambiguousArgs.push(userArgs[i]);
+        if (
+          value === undefined &&
+          (babelOptionsWithValue.has(arg) || nodeFlagsWithValue.has(arg)) &&
+          i + 1 < userArgs.length
+        ) {
+          ambiguousArgs.push(userArgs[++i]);
+        }
       } else {
-        args.push(arg);
+        unambiguousArgs?.push(userArgs[i]);
       }
     }
-
-    // append arguments passed after --
-    if (argSeparator > -1) {
-      args.push(...userArgs);
+    if (ambiguousArgsNames.length > 0) {
+      const them = ambiguousArgsNames.length === 1 ? "it" : "them";
+      const they = ambiguousArgsNames.length === 1 ? "it" : "they";
+      const are = ambiguousArgsNames.length === 1 ? "is" : "are";
+      console.warn(
+        `Warning: ${ambiguousArgsNames.join(", ")} ${are} a valid option for Babel or Node.js, ` +
+          `but ${they} ${are} defined after the script name. Up to Babel 7 ${they} would have ` +
+          `been passed to Babel, while now ${they} ${are} passed to the script itself.\n` +
+          `  If the intention is to pass ${them} to Babel, move ${them} before the filename:\n` +
+          `    babel-node ${programArgs.join(" ")} ${ambiguousArgs.join(" ")} ${fileName} ${unambiguousArgs!.join(" ")}\n` +
+          `  If passing ${them} to the script is intended, you can silence this warning by explicitly ` +
+          `using the -- separator before the script name:\n` +
+          `    babel-node ${programArgs.join(" ")} -- ${fileName} ${userArgs.join(" ")}`,
+      );
     }
-
-    await spawn(args);
   }
+
+  await spawn([
+    ...nodeArgs,
+    "--",
+    babelNodePath,
+    ...babelArgs,
+    "--",
+    fileName!,
+    ...userArgs,
+  ]);
 })().catch(err => {
   console.error(err);
   process.exitCode = 1;
@@ -215,7 +168,7 @@ async function spawn(args: string[]) {
       });
     });
     if (shouldPassthroughIPC) {
-      proc.on("message", message => process.send(message));
+      proc.on("message", message => process.send!(message));
     }
     process.on("SIGINT", () => proc.kill("SIGINT"));
     process.on("SIGTERM", () => proc.kill("SIGTERM"));

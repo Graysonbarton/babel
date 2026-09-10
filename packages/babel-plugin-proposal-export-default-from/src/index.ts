@@ -2,7 +2,7 @@ import { declare } from "@babel/helper-plugin-utils";
 import { types as t } from "@babel/core";
 
 export default declare(api => {
-  api.assertVersion(REQUIRED_VERSION(7));
+  api.assertVersion(REQUIRED_VERSION("^7.0.0-0 || ^8.0.0"));
 
   return {
     name: "proposal-export-default-from",
@@ -14,7 +14,7 @@ export default declare(api => {
         const { specifiers, source } = node;
         if (!t.isExportDefaultSpecifier(specifiers[0])) return;
 
-        const { exported } = specifiers.shift();
+        const { exported } = specifiers.shift()!;
 
         if (specifiers.every(s => t.isExportSpecifier(s))) {
           specifiers.unshift(

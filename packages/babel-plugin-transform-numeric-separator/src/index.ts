@@ -17,14 +17,11 @@ function remover({ node }: NodePath<t.BigIntLiteral | t.NumericLiteral>) {
 }
 
 export default declare(api => {
-  api.assertVersion(REQUIRED_VERSION(7));
+  api.assertVersion(REQUIRED_VERSION("^7.0.0-0 || ^8.0.0"));
 
   return {
     name: "transform-numeric-separator",
-    manipulateOptions: process.env.BABEL_8_BREAKING
-      ? undefined
-      : (_, parser) => parser.plugins.push("numericSeparator"),
-
+    manipulateOptions: undefined,
     visitor: {
       NumericLiteral: remover,
       BigIntLiteral: remover,

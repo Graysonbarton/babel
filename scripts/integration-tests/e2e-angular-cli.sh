@@ -26,10 +26,19 @@ mkdir tmp && cd tmp
 npx -p @angular/cli ng new --defaults ngx --package-manager yarn --skip-git --skip-install
 cd ngx
 node "$dir"/utils/bump-babel-dependencies.js resolutions
+# Disable yarn minimal age gate because npx will fetch the latest version of Angular CLI
+echo "npmMinimalAgeGate: 0" >> .yarnrc.yml
 touch yarn.lock
 yarn set version stable
-YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn
+export YARN_ENABLE_IMMUTABLE_INSTALLS=false
+yarn install
+# Install browser-playwright for ChromiumHeadless testing
+# Pinned to 4.x: @angular/build's vitest peer dep is still ^4.0.8, while
+# @vitest/browser-playwright@5 requires vitest@5.0.0 exactly, which breaks
+# @angular/build's "ng test" (missing BrowserConnectionError export etc).
+yarn add playwright @vitest/browser-playwright@4 --dev
+yarn playwright install --with-deps
 yarn run build
-yarn run ng test --watch=false --browsers ChromeHeadless
+yarn run ng test --watch=false --browsers ChromiumHeadless
 
 cleanup

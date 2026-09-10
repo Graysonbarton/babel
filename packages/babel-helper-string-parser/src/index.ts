@@ -1,5 +1,3 @@
-// We inline this package
-// eslint-disable-next-line import/no-extraneous-dependencies
 import * as charCodes from "charcodes";
 
 // The following character codes are forbidden from being
@@ -118,16 +116,7 @@ export function readStringContents(
       ++pos;
     }
   }
-  return process.env.BABEL_8_BREAKING
-    ? { pos, str: out, firstInvalidLoc, lineStart, curLine }
-    : {
-        pos,
-        str: out,
-        firstInvalidLoc,
-        lineStart,
-        curLine,
-        containsInvalid: !!firstInvalidLoc,
-      };
+  return { pos, str: out, firstInvalidLoc, lineStart, curLine };
 }
 
 function isStringEnd(
@@ -229,7 +218,7 @@ function readEscapedChar(
     default:
       if (ch >= charCodes.digit0 && ch <= charCodes.digit7) {
         const startPos = pos - 1;
-        const match = /^[0-7]+/.exec(input.slice(startPos, pos + 2));
+        const match = /^[0-7]+/.exec(input.slice(startPos, pos + 2))!;
 
         let octalStr = match[0];
 

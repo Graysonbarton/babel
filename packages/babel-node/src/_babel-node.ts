@@ -1,15 +1,13 @@
-import Module from "module";
-import { inspect } from "util";
-import path from "path";
-import repl from "repl";
+import Module from "node:module";
+import { inspect } from "node:util";
+import path from "node:path";
+import repl from "node:repl";
 import * as babel from "@babel/core";
-import vm from "vm";
+import vm from "node:vm";
 import "core-js/stable/index.js";
-import "regenerator-runtime/runtime.js";
-// @ts-expect-error @babel/register is a CommonJS module
 import register from "@babel/register";
-import { fileURLToPath } from "url";
-import { createRequire } from "module";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import type { PluginAPI, PluginObject } from "@babel/core";
 
 import { program } from "./program-setup.ts";
@@ -22,6 +20,9 @@ const opts = program.opts();
 const babelOptions = {
   caller: {
     name: "@babel/node",
+    supportsStaticESM: false,
+    supportsDynamicImport: false,
+    supportsExportNamespaceFrom: false,
   },
   extensions: opts.extensions,
   ignore: opts.ignore,
@@ -38,9 +39,7 @@ const babelOptions = {
   babelrc: opts.babelrc === true ? undefined : opts.babelrc,
 };
 
-for (const key of Object.keys(babelOptions) as Array<
-  keyof typeof babelOptions
->) {
+for (const key of Object.keys(babelOptions) as (keyof typeof babelOptions)[]) {
   if (babelOptions[key] === undefined) {
     delete babelOptions[key];
   }
@@ -48,10 +47,14 @@ for (const key of Object.keys(babelOptions) as Array<
 
 register(babelOptions);
 
+let hasTopLevelAwait = false;
+
 const replPlugin = ({ types: t }: PluginAPI): PluginObject => ({
   visitor: {
     Program(path) {
-      let hasExpressionStatement: boolean;
+      hasTopLevelAwait = path.node.extra?.topLevelAwait as boolean;
+
+      let hasExpressionStatement: boolean | undefined;
       for (const bodyPath of path.get("body")) {
         if (bodyPath.isExpressionStatement()) {
           hasExpressionStatement = true;
@@ -64,6 +67,21 @@ const replPlugin = ({ types: t }: PluginAPI): PluginObject => ({
           );
         }
       }
+
+      if (hasTopLevelAwait) {
+        const body = path.node.body;
+        for (let i = body.length - 1; i >= 0; i--) {
+          if (t.isExpressionStatement(body[i])) {
+            body[i] = t.returnStatement(
+              (body[i] as babel.types.ExpressionStatement).expression,
+            );
+            break;
+          }
+        }
+
+        return;
+      }
+
       if (hasExpressionStatement) return;
 
       // If the executed code doesn't evaluate to a value,
@@ -80,11 +98,20 @@ const _eval = function (code: string, filename: string) {
   code = code.trim();
   if (!code) return undefined;
 
+  hasTopLevelAwait = false;
+
   code = babel.transformSync(code, {
     filename: filename,
     ...babelOptions,
+    parserOpts: {
+      allowAwaitOutsideFunction: true,
+    },
     plugins: (opts.plugins || []).concat([replPlugin]),
-  }).code;
+  })!.code!;
+
+  if (hasTopLevelAwait) {
+    code = `(async () => { ${code} })()`;
+  }
 
   return vm.runInThisContext(code, {
     filename: filename,
@@ -105,6 +132,7 @@ if (opts.eval || opts.print) {
 
   global.exports = module.exports;
   global.module = module;
+  // @ts-expect-error missing require.extensions
   global.require = module.require.bind(module);
 
   const result = _eval(code, global.__filename);
@@ -125,7 +153,7 @@ if (opts.eval || opts.print) {
         return;
       }
 
-      if (arg[0] === "-") {
+      if (arg.startsWith("-")) {
         const parsedOption = program.options.find((option: any) => {
           return option.long === arg || option.short === arg;
         });
@@ -184,7 +212,7 @@ function replEval(
   let result;
 
   try {
-    if (code[0] === "(" && code[code.length - 1] === ")") {
+    if (code.startsWith("(") && code.endsWith(")")) {
       code = code.slice(1, -1); // remove "(" and ")"
     }
 
@@ -193,7 +221,17 @@ function replEval(
     err = e;
   }
 
-  callback(err, result);
+  if (hasTopLevelAwait && !err) {
+    (result as Promise<any>)
+      .then(v => {
+        callback(null, v);
+      })
+      .catch(e => {
+        callback(e, null);
+      });
+  } else {
+    callback(err, result);
+  }
 }
 
 function replStart() {
@@ -206,9 +244,7 @@ function replStart() {
     preview: true,
   });
   const NODE_REPL_HISTORY = process.env.NODE_REPL_HISTORY;
-  if (process.env.BABEL_8_BREAKING) {
-    replServer.setupHistory(NODE_REPL_HISTORY, () => {});
-  } else {
-    replServer.setupHistory?.(NODE_REPL_HISTORY, () => {});
-  }
+
+  // @ts-expect-error setupHistory may be undefined
+  replServer.setupHistory(NODE_REPL_HISTORY, () => {});
 }

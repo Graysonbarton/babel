@@ -1,31 +1,156 @@
-import type { PluginList } from "./plugin-utils.ts";
+import type { Plugin } from "./plugin-utils.ts";
 
 // A second optional argument can be given to further configure
 // the parser process. These options are recognized:
 
-export type SourceType = "script" | "module" | "unambiguous";
+export type SourceType = "script" | "commonjs" | "module" | "unambiguous";
 
 export interface Options {
-  sourceType?: SourceType;
-  sourceFilename?: string;
-  startIndex?: number;
-  startColumn?: number;
-  startLine?: number;
-  allowAwaitOutsideFunction?: boolean;
-  allowReturnOutsideFunction?: boolean;
-  allowNewTargetOutsideFunction?: boolean;
+  /**
+   * By default, import and export declarations can only appear at a program's top level.
+   * Setting this option to true allows them anywhere where a statement is allowed.
+   */
   allowImportExportEverywhere?: boolean;
+
+  /**
+   * By default, await use is not allowed outside of an async function.
+   * Set this to true to accept such code.
+   */
+  allowAwaitOutsideFunction?: boolean;
+
+  /**
+   * By default, a return statement at the top level raises an error.
+   * Set this to true to accept such code.
+   */
+  allowReturnOutsideFunction?: boolean;
+
+  /**
+   * By default, new.target use is not allowed outside of a function or class.
+   * Set this to true to accept such code.
+   */
+  allowNewTargetOutsideFunction?: boolean;
+
+  /**
+   * By default, super calls are not allowed outside of a method.
+   * Set this to true to accept such code.
+   */
   allowSuperOutsideMethod?: boolean;
+
+  /**
+   * By default, exported identifiers must refer to a declared variable.
+   * Set this to true to allow export statements to reference undeclared variables.
+   */
   allowUndeclaredExports?: boolean;
-  plugins?: PluginList;
-  strictMode?: boolean | undefined | null;
-  ranges?: boolean;
-  tokens?: boolean;
-  createImportExpressions?: boolean;
-  createParenthesizedExpressions?: boolean;
-  errorRecovery?: boolean;
-  attachComment?: boolean;
+
+  /**
+   * By default, yield use is not allowed outside of a generator function.
+   * Set this to true to accept such code.
+   */
+
+  allowYieldOutsideFunction?: boolean;
+
+  /**
+   * By default, Babel parser JavaScript code according to Annex B syntax.
+   * Set this to `false` to disable such behavior.
+   */
   annexB?: boolean;
+
+  /**
+   * By default, Babel attaches comments to adjacent AST nodes.
+   * When this option is set to false, comments are not attached.
+   * It can provide up to 30% performance improvement when the input code has many comments.
+   * @babel/eslint-parser will set it for you.
+   * It is not recommended to use attachComment: false with Babel transform,
+   * as doing so removes all the comments in output code, and renders annotations such as
+   * /* istanbul ignore next *\/ nonfunctional.
+   */
+  attachComment?: boolean;
+
+  /**
+   * By default, Babel always throws an error when it finds some invalid code.
+   * When this option is set to true, it will store the parsing error and
+   * try to continue parsing the invalid input file.
+   */
+  errorRecovery?: boolean;
+
+  /**
+   * Indicate the mode the code should be parsed in.
+   * Can be one of "script", "commonjs", "module", or "unambiguous". Defaults to "script".
+   * "unambiguous" will make @babel/parser attempt to guess, based on the presence
+   * of ES6 import or export statements.
+   * Files with ES6 imports and exports are considered "module" and are otherwise "script".
+   *
+   * Use "commonjs" to parse code that is intended to be run in a CommonJS environment such as Node.js.
+   */
+  sourceType?: SourceType;
+
+  /**
+   * Correlate output AST nodes with their source filename.
+   * Useful when generating code and source maps from the ASTs of multiple input files.
+   */
+  sourceFilename?: string;
+
+  /**
+   * By default, all source indexes start from 0.
+   * You can provide a start index to alternatively start with.
+   * Useful for integration with other source tools.
+   */
+  startIndex?: number;
+
+  /**
+   * By default, the first line of code parsed is treated as line 1.
+   * You can provide a line number to alternatively start with.
+   * Useful for integration with other source tools.
+   */
+  startLine?: number;
+
+  /**
+   * By default, the parsed code is treated as if it starts from line 1, column 0.
+   * You can provide a column number to alternatively start with.
+   * Useful for integration with other source tools.
+   */
+  startColumn?: number;
+
+  /**
+   * Array containing the plugins that you want to enable.
+   */
+  plugins?: Plugin[];
+
+  /**
+   * Should the parser work in strict mode.
+   * Defaults to true if sourceType === 'module'. Otherwise, false.
+   */
+  strictMode?: boolean;
+
+  /**
+   * Adds a ranges property to each node: [node.start, node.end]
+   */
+  ranges?: boolean;
+
+  /**
+   * Adds a locations property to each node: [node.loc]
+   */
+
+  locations?: boolean;
+
+  /**
+   * Adds all parsed tokens to a tokens property on the File node.
+   */
+  tokens?: boolean;
+
+  /**
+   * By default, the parser adds information about parentheses by setting
+   * `extra.parenthesized` to `true` as needed.
+   * When this option is `true` the parser creates `ParenthesizedExpression`
+   * AST nodes instead of using the `extra` property.
+   */
+  createParenthesizedExpressions?: boolean;
+
+  /**
+   * By default, the parser parses import expressions as an `ImportExpression` node.
+   * Set this to false to parse it as `CallExpression(Import, [Identifier(foo)])`.
+   */
+  createImportExpressions?: boolean;
 }
 
 export const enum OptionFlags {
@@ -34,17 +159,21 @@ export const enum OptionFlags {
   AllowNewTargetOutsideFunction = 1 << 2,
   AllowImportExportEverywhere = 1 << 3,
   AllowSuperOutsideMethod = 1 << 4,
-  AllowUndeclaredExports = 1 << 5,
-  Ranges = 1 << 6,
-  Tokens = 1 << 7,
-  CreateImportExpressions = 1 << 8,
-  CreateParenthesizedExpressions = 1 << 9,
-  ErrorRecovery = 1 << 10,
-  AttachComment = 1 << 11,
-  AnnexB = 1 << 12,
+  AllowYieldOutsideFunction = 1 << 5,
+  AllowUndeclaredExports = 1 << 6,
+  Ranges = 1 << 7,
+  Locations = 1 << 8,
+  Tokens = 1 << 9,
+  CreateImportExpressions = 1 << 10,
+  CreateParenthesizedExpressions = 1 << 11,
+  ErrorRecovery = 1 << 12,
+  AttachComment = 1 << 13,
+  AnnexB = 1 << 14,
 }
 
-type OptionsWithDefaults = { [P in keyof Options]-?: Options[P] };
+type KeepOptionalKeys = "sourceFilename" | "strictMode";
+export type OptionsWithDefaults = Omit<Required<Options>, KeepOptionalKeys> &
+  Pick<Options, KeepOptionalKeys>;
 
 function createDefaultOptions(): OptionsWithDefaults {
   return {
@@ -73,14 +202,15 @@ function createDefaultOptions(): OptionsWithDefaults {
     // When enabled, import/export statements are not constrained to
     // appearing at the top of the program.
     allowImportExportEverywhere: false,
-    // TODO
+    // When enabled, super outside a method is not considered an error.
     allowSuperOutsideMethod: false,
     // When enabled, export statements can reference undeclared variables.
     allowUndeclaredExports: false,
+    allowYieldOutsideFunction: false,
     // An array of plugins to enable
     plugins: [],
     // TODO
-    strictMode: null,
+    strictMode: undefined,
     // Nodes have their start and end characters offsets recorded in
     // `start` and `end` properties (directly on the node, rather than
     // the `loc` object, which holds line/column data. To also add a
@@ -90,11 +220,13 @@ function createDefaultOptions(): OptionsWithDefaults {
     //
     // [range]: https://bugzilla.mozilla.org/show_bug.cgi?id=745678
     ranges: false,
+    // Nodes have their start and end line/columns recorded in `loc` property.
+    locations: true,
     // Adds all parsed tokens to a `tokens` property on the `File` node
     tokens: false,
     // Whether to create ImportExpression AST nodes (if false
     // `import(foo)` will be parsed as CallExpression(Import, [Identifier(foo)])
-    createImportExpressions: process.env.BABEL_8_BREAKING ? true : false,
+    createImportExpressions: true,
     // Whether to create ParenthesizedExpression AST nodes (if false
     // the parser sets extra.parenthesized on the expression nodes instead).
     createParenthesizedExpressions: false,
@@ -138,9 +270,25 @@ export function getOptions(opts?: Options | null): OptionsWithDefaults {
       options.startColumn = options.startIndex;
     }
   } else if (opts.startColumn == null || opts.startIndex == null) {
-    if (opts.startIndex != null || process.env.BABEL_8_BREAKING) {
+    throw new Error(
+      "With a `startLine > 1` you must also specify `startIndex` and `startColumn`.",
+    );
+  }
+
+  if (options.sourceType === "commonjs") {
+    if (opts.allowAwaitOutsideFunction != null) {
       throw new Error(
-        "With a `startLine > 1` you must also specify `startIndex` and `startColumn`.",
+        "The `allowAwaitOutsideFunction` option cannot be used with `sourceType: 'commonjs'`.",
+      );
+    }
+    if (opts.allowReturnOutsideFunction != null) {
+      throw new Error(
+        "`sourceType: 'commonjs'` implies `allowReturnOutsideFunction: true`, please remove the `allowReturnOutsideFunction` option or use `sourceType: 'script'`.",
+      );
+    }
+    if (opts.allowNewTargetOutsideFunction != null) {
+      throw new Error(
+        "`sourceType: 'commonjs'` implies `allowNewTargetOutsideFunction: true`, please remove the `allowNewTargetOutsideFunction` option or use `sourceType: 'script'`.",
       );
     }
   }

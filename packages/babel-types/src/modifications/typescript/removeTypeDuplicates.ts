@@ -20,8 +20,8 @@ function getQualifiedName(node: t.TSTypeReference["typeName"]): string {
  * Dedupe type annotations.
  */
 export default function removeTypeDuplicates(
-  nodesIn: ReadonlyArray<t.TSType>,
-): Array<t.TSType> {
+  nodesIn: readonly t.TSType[],
+): t.TSType[] {
   const nodes = Array.from(nodesIn);
 
   const generics = new Map<string, t.TSTypeReference>();
@@ -61,26 +61,18 @@ export default function removeTypeDuplicates(
     }
 
     // todo: support merging tuples: number[]
-    const typeArgumentsKey = process.env.BABEL_8_BREAKING
-      ? "typeArguments"
-      : "typeParameters";
-    // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST
+    const typeArgumentsKey = "typeArguments";
     if (isTSTypeReference(node) && node[typeArgumentsKey]) {
-      // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST
       const typeArguments = node[typeArgumentsKey];
       const name = getQualifiedName(node.typeName);
 
       if (generics.has(name)) {
-        let existing: t.TypeScript = generics.get(name);
-        // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST
-        const existingTypeArguments = existing[typeArgumentsKey];
+        const existingTypeArguments = generics.get(name)![typeArgumentsKey];
         if (existingTypeArguments) {
           existingTypeArguments.params.push(...typeArguments.params);
           existingTypeArguments.params = removeTypeDuplicates(
             existingTypeArguments.params,
           );
-        } else {
-          existing = typeArguments;
         }
       } else {
         generics.set(name, node);

@@ -1,5 +1,9 @@
 import type Printer from "../printer.ts";
 import type * as t from "@babel/types";
+import * as charCodes from "charcodes";
+import { _functionHead, _param, _parameters } from "./methods.ts";
+import { _classMethodHead } from "./classes.ts";
+import { _printTemplate } from "./template-literals.ts";
 
 export function TSTypeAnnotation(
   this: Printer,
@@ -10,11 +14,7 @@ export function TSTypeAnnotation(
   // of the return type of an arrow function type
   this.token(
     (parent.type === "TSFunctionType" || parent.type === "TSConstructorType") &&
-      (process.env.BABEL_8_BREAKING
-        ? // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST shape
-          parent.returnType
-        : // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST shape
-          parent.typeAnnotation) === node
+      parent.returnType === node
       ? "=>"
       : ":",
   );
@@ -31,16 +31,16 @@ export function TSTypeParameterInstantiation(
 ): void {
   this.token("<");
 
-  let printTrailingSeparator =
+  let printTrailingSeparator: boolean | null =
     parent.type === "ArrowFunctionExpression" && node.params.length === 1;
   if (this.tokenMap && node.start != null && node.end != null) {
     // Only force the trailing comma for pre-existing nodes if they
     // already had a comma (either because they were multi-param, or
     // because they had a trailing comma)
     printTrailingSeparator &&= !!this.tokenMap.find(node, t =>
-      this.tokenMap.matchesOriginal(t, ","),
+      this.tokenMap!.matchesOriginal(t, ","),
     );
-    // Preseve the trailing comma if it was there before
+    // Preserve the trailing comma if it was there before
     printTrailingSeparator ||= this.shouldPrintTrailingComma(">");
   }
 
@@ -51,6 +51,11 @@ export function TSTypeParameterInstantiation(
 export { TSTypeParameterInstantiation as TSTypeParameterDeclaration };
 
 export function TSTypeParameter(this: Printer, node: t.TSTypeParameter) {
+  if (node.const) {
+    this.word("const");
+    this.space();
+  }
+
   if (node.in) {
     this.word("in");
     this.space();
@@ -61,11 +66,7 @@ export function TSTypeParameter(this: Printer, node: t.TSTypeParameter) {
     this.space();
   }
 
-  this.word(
-    !process.env.BABEL_8_BREAKING
-      ? (node.name as unknown as string)
-      : (node.name as unknown as t.Identifier).name,
-  );
+  this.word(node.name.name);
 
   if (node.constraint) {
     this.space();
@@ -96,7 +97,7 @@ export function TSParameterProperty(
     this.space();
   }
 
-  this._param(node.parameter);
+  _param.call(this, node.parameter);
 }
 
 export function TSDeclareFunction(
@@ -108,12 +109,12 @@ export function TSDeclareFunction(
     this.word("declare");
     this.space();
   }
-  this._functionHead(node, parent);
+  _functionHead.call(this, node, parent, false);
   this.semicolon();
 }
 
 export function TSDeclareMethod(this: Printer, node: t.TSDeclareMethod) {
-  this._classMethodHead(node);
+  _classMethodHead.call(this, node, false);
   this.semicolon();
 }
 
@@ -127,7 +128,7 @@ export function TSCallSignatureDeclaration(
   this: Printer,
   node: t.TSCallSignatureDeclaration,
 ) {
-  this.tsPrintSignatureDeclarationBase(node);
+  tsPrintSignatureDeclarationBase.call(this, node);
   maybePrintTrailingCommaOrSemicolon(this, node);
 }
 
@@ -150,7 +151,7 @@ export function TSConstructSignatureDeclaration(
 ) {
   this.word("new");
   this.space();
-  this.tsPrintSignatureDeclarationBase(node);
+  tsPrintSignatureDeclarationBase.call(this, node);
   maybePrintTrailingCommaOrSemicolon(this, node);
 }
 
@@ -163,12 +164,12 @@ export function TSPropertySignature(
     this.word("readonly");
     this.space();
   }
-  this.tsPrintPropertyOrMethodName(node);
+  tsPrintPropertyOrMethodName.call(this, node);
   this.print(node.typeAnnotation);
   maybePrintTrailingCommaOrSemicolon(this, node);
 }
 
-export function tsPrintPropertyOrMethodName(
+function tsPrintPropertyOrMethodName(
   this: Printer,
   node: t.TSPropertySignature | t.TSMethodSignature,
 ) {
@@ -190,8 +191,8 @@ export function TSMethodSignature(this: Printer, node: t.TSMethodSignature) {
     this.word(kind);
     this.space();
   }
-  this.tsPrintPropertyOrMethodName(node);
-  this.tsPrintSignatureDeclarationBase(node);
+  tsPrintPropertyOrMethodName.call(this, node);
+  tsPrintSignatureDeclarationBase.call(this, node);
   maybePrintTrailingCommaOrSemicolon(this, node);
 }
 
@@ -206,7 +207,7 @@ export function TSIndexSignature(this: Printer, node: t.TSIndexSignature) {
     this.space();
   }
   this.token("[");
-  this._parameters(node.parameters, "]");
+  _parameters.call(this, node.parameters, charCodes.rightSquareBracket);
   this.print(node.typeAnnotation);
   maybePrintTrailingCommaOrSemicolon(this, node);
 }
@@ -256,7 +257,7 @@ export function TSThisType(this: Printer) {
 }
 
 export function TSFunctionType(this: Printer, node: t.TSFunctionType) {
-  this.tsPrintFunctionOrConstructorType(node);
+  tsPrintFunctionOrConstructorType.call(this, node);
 }
 
 export function TSConstructorType(this: Printer, node: t.TSConstructorType) {
@@ -266,37 +267,28 @@ export function TSConstructorType(this: Printer, node: t.TSConstructorType) {
   }
   this.word("new");
   this.space();
-  this.tsPrintFunctionOrConstructorType(node);
+  tsPrintFunctionOrConstructorType.call(this, node);
 }
 
-export function tsPrintFunctionOrConstructorType(
+function tsPrintFunctionOrConstructorType(
   this: Printer,
   node: t.TSFunctionType | t.TSConstructorType,
 ) {
   const { typeParameters } = node;
-  const parameters = process.env.BABEL_8_BREAKING
-    ? // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST shape
-      node.params
-    : // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST shape
-      node.parameters;
+  const parameters = node.params;
+
   this.print(typeParameters);
   this.token("(");
-  this._parameters(parameters, ")");
+  _parameters.call(this, parameters, charCodes.rightParenthesis);
   this.space();
-  const returnType = process.env.BABEL_8_BREAKING
-    ? // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST shape
-      node.returnType
-    : // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST shape
-      node.typeAnnotation;
+  const returnType = node.returnType;
+
   this.print(returnType);
 }
 
 export function TSTypeReference(this: Printer, node: t.TSTypeReference) {
-  const typeArguments = process.env.BABEL_8_BREAKING
-    ? // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST shape
-      node.typeArguments
-    : // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST shape
-      node.typeParameters;
+  const typeArguments = node.typeArguments;
+
   this.print(node.typeName, !!typeArguments);
   this.print(typeArguments);
 }
@@ -320,18 +312,17 @@ export function TSTypeQuery(this: Printer, node: t.TSTypeQuery) {
   this.space();
   this.print(node.exprName);
 
-  const typeArguments = process.env.BABEL_8_BREAKING
-    ? //@ts-ignore(Babel 7 vs Babel 8) Babel 8 AST
-      node.typeArguments
-    : //@ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-      node.typeParameters;
+  const typeArguments = node.typeArguments;
+
   if (typeArguments) {
     this.print(typeArguments);
   }
 }
 
 export function TSTypeLiteral(this: Printer, node: t.TSTypeLiteral) {
-  printBraced(this, node, () => this.printJoin(node.members, true, true));
+  printBraced(this, node, () =>
+    this.printJoin(node.members, true, true, undefined, undefined, true),
+  );
 }
 
 export function TSArrayType(this: Printer, node: t.TSArrayType) {
@@ -386,7 +377,7 @@ function tsPrintUnionOrIntersectionType(
 
   printer.printJoin(node.types, undefined, undefined, function (i) {
     this.space();
-    this.token(sep, null, i + hasLeadingToken);
+    this.token(sep, undefined, i + hasLeadingToken);
     this.space();
   });
 }
@@ -440,7 +431,7 @@ export function TSIndexedAccessType(
 export function TSMappedType(this: Printer, node: t.TSMappedType) {
   const { nameType, optional, readonly, typeAnnotation } = node;
   this.token("{");
-  const exit = this.enterDelimited();
+  const oldNoLineTerminatorAfterNode = this.enterDelimited();
   this.space();
   if (readonly) {
     tokenIfPlusMinus(this, readonly);
@@ -449,30 +440,20 @@ export function TSMappedType(this: Printer, node: t.TSMappedType) {
   }
 
   this.token("[");
-  if (process.env.BABEL_8_BREAKING) {
-    // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST shape
-    this.word(node.key.name);
-  } else {
-    // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST shape
-    this.word(node.typeParameter.name);
-  }
+
+  this.word(node.key.name);
 
   this.space();
   this.word("in");
   this.space();
-  if (process.env.BABEL_8_BREAKING) {
-    // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST shape
-    this.print(node.constraint);
-  } else {
-    // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST shape
-    this.print(node.typeParameter.constraint);
-  }
+
+  this.print(node.constraint);
 
   if (nameType) {
     this.space();
     this.word("as");
     this.space();
-    this.print(nameType);
+    this.print(nameType, undefined, true);
   }
 
   this.token("]");
@@ -485,10 +466,10 @@ export function TSMappedType(this: Printer, node: t.TSMappedType) {
   if (typeAnnotation) {
     this.token(":");
     this.space();
-    this.print(typeAnnotation);
+    this.print(typeAnnotation, undefined, true);
   }
   this.space();
-  exit();
+  this._noLineTerminatorAfterNode = oldNoLineTerminatorAfterNode;
   this.token("}");
 }
 
@@ -502,21 +483,14 @@ export function TSTemplateLiteralType(
   this: Printer,
   node: t.TSTemplateLiteralType,
 ) {
-  this._printTemplate(node, node.types);
+  _printTemplate.call(this, node, node.types);
 }
 
 export function TSLiteralType(this: Printer, node: t.TSLiteralType) {
   this.print(node.literal);
 }
 
-export function TSClassImplements(
-  this: Printer,
-  // TODO(Babel 8): Just use t.TSClassImplements
-  node: t.Node & {
-    expression: t.TSEntityName;
-    typeArguments?: t.TSTypeParameterInstantiation;
-  },
-) {
+export function TSClassImplements(this: Printer, node: t.TSClassImplements) {
   this.print(node.expression);
   this.print(node.typeArguments);
 }
@@ -547,7 +521,9 @@ export function TSInterfaceDeclaration(
 }
 
 export function TSInterfaceBody(this: Printer, node: t.TSInterfaceBody) {
-  printBraced(this, node, () => this.printJoin(node.body, true, true));
+  printBraced(this, node, () =>
+    this.printJoin(node.body, true, true, undefined, undefined, true),
+  );
 }
 
 export function TSTypeAliasDeclaration(
@@ -570,22 +546,26 @@ export function TSTypeAliasDeclaration(
   this.semicolon();
 }
 
-function TSTypeExpression(
-  this: Printer,
-  node: t.TSAsExpression | t.TSSatisfiesExpression,
-) {
-  const { type, expression, typeAnnotation } = node;
+export function TSAsExpression(this: Printer, node: t.TSAsExpression) {
+  const { expression, typeAnnotation } = node;
   this.print(expression, true);
   this.space();
-  this.word(type === "TSAsExpression" ? "as" : "satisfies");
+  this.word("as");
   this.space();
   this.print(typeAnnotation);
 }
 
-export {
-  TSTypeExpression as TSAsExpression,
-  TSTypeExpression as TSSatisfiesExpression,
-};
+export function TSSatisfiesExpression(
+  this: Printer,
+  node: t.TSSatisfiesExpression,
+) {
+  const { expression, typeAnnotation } = node;
+  this.print(expression, true);
+  this.space();
+  this.word("satisfies");
+  this.space();
+  this.print(typeAnnotation);
+}
 
 export function TSTypeAssertion(this: Printer, node: t.TSTypeAssertion) {
   const { typeAnnotation, expression } = node;
@@ -601,13 +581,8 @@ export function TSInstantiationExpression(
   node: t.TSInstantiationExpression,
 ) {
   this.print(node.expression);
-  if (process.env.BABEL_8_BREAKING) {
-    // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST
-    this.print(node.typeArguments);
-  } else {
-    // @ts-ignore(Babel 7 vs Babel 8) Removed in Babel 8
-    this.print(node.typeParameters);
-  }
+
+  this.print(node.typeArguments);
 }
 
 export function TSEnumDeclaration(this: Printer, node: t.TSEnumDeclaration) {
@@ -625,22 +600,17 @@ export function TSEnumDeclaration(this: Printer, node: t.TSEnumDeclaration) {
   this.print(id);
   this.space();
 
-  if (process.env.BABEL_8_BREAKING) {
-    // @ts-ignore(Babel 7 vs Babel 8) Babel 8 AST
-    this.print(node.body);
-  } else {
-    // cast to TSEnumBody for Babel 7 AST
-    TSEnumBody.call(this, node as unknown as t.TSEnumBody);
-  }
+  this.print(node.body);
 }
 
 export function TSEnumBody(this: Printer, node: t.TSEnumBody) {
   printBraced(this, node, () =>
     this.printList(
       node.members,
-      this.shouldPrintTrailingComma("}") ??
-        (process.env.BABEL_8_BREAKING ? false : true),
+      this.shouldPrintTrailingComma("}") ?? false,
       true,
+      true,
+      undefined,
       true,
     ),
   );
@@ -661,64 +631,36 @@ export function TSModuleDeclaration(
   this: Printer,
   node: t.TSModuleDeclaration,
 ) {
-  const { declare, id, kind } = node;
+  const { declare, kind } = node;
 
   if (declare) {
     this.word("declare");
     this.space();
   }
 
-  if (process.env.BABEL_8_BREAKING) {
-    if (kind !== "global") {
-      this.word(kind);
-      this.space();
-    }
-
-    this.print(node.id);
-    if (!node.body) {
-      this.semicolon();
-      return;
-    }
+  if (kind !== "global") {
+    this.word(kind);
     this.space();
-    this.print(node.body);
-  } else {
-    // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST shape
-    if (!node.global) {
-      this.word(kind ?? (id.type === "Identifier" ? "namespace" : "module"));
-      this.space();
-    }
-
-    this.print(id);
-
-    if (!node.body) {
-      this.semicolon();
-      return;
-    }
-
-    let body = node.body;
-    // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST shape
-    while (body.type === "TSModuleDeclaration") {
-      this.token(".");
-      // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST shape
-      this.print(body.id);
-      // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST shape
-      body = body.body;
-    }
-
-    this.space();
-    this.print(body);
   }
+
+  this.print(node.id);
+  if (!node.body) {
+    this.semicolon();
+    return;
+  }
+  this.space();
+  this.print(node.body);
 }
 
 export function TSModuleBlock(this: Printer, node: t.TSModuleBlock) {
-  printBraced(this, node, () => this.printSequence(node.body, true));
+  printBraced(this, node, () => this.printSequence(node.body, true, true));
 }
 
 export function TSImportType(this: Printer, node: t.TSImportType) {
-  const { argument, qualifier, options } = node;
+  const { qualifier, options } = node;
   this.word("import");
   this.token("(");
-  this.print(argument);
+  this.print(node.source);
   if (options) {
     this.token(",");
     this.print(options);
@@ -728,11 +670,8 @@ export function TSImportType(this: Printer, node: t.TSImportType) {
     this.token(".");
     this.print(qualifier);
   }
-  const typeArguments = process.env.BABEL_8_BREAKING
-    ? //@ts-ignore(Babel 7 vs Babel 8) Babel 8 AST
-      node.typeArguments
-    : //@ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-      node.typeParameters;
+  const typeArguments = node.typeArguments;
+
   if (typeArguments) {
     this.print(typeArguments);
   }
@@ -743,14 +682,7 @@ export function TSImportEqualsDeclaration(
   node: t.TSImportEqualsDeclaration,
 ) {
   const { id, moduleReference } = node;
-  if (
-    !process.env.BABEL_8_BREAKING &&
-    // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-    node.isExport
-  ) {
-    this.word("export");
-    this.space();
-  }
+
   this.word("import");
   this.space();
   this.print(id);
@@ -776,6 +708,7 @@ export function TSNonNullExpression(
 ) {
   this.print(node.expression);
   this.token("!");
+  this.setLastChar(charCodes.exclamationMark);
 }
 
 export function TSExportAssignment(this: Printer, node: t.TSExportAssignment) {
@@ -801,58 +734,55 @@ export function TSNamespaceExportDeclaration(
   this.semicolon();
 }
 
-export function tsPrintSignatureDeclarationBase(this: Printer, node: any) {
+function tsPrintSignatureDeclarationBase(this: Printer, node: any) {
   const { typeParameters } = node;
-  const parameters = process.env.BABEL_8_BREAKING
-    ? node.params
-    : node.parameters;
+  const parameters = node.params;
   this.print(typeParameters);
   this.token("(");
-  this._parameters(parameters, ")");
-  const returnType = process.env.BABEL_8_BREAKING
-    ? node.returnType
-    : node.typeAnnotation;
-  this.print(returnType);
+  _parameters.call(this, parameters, charCodes.rightParenthesis);
+  this.print(node.returnType);
 }
 
-export function tsPrintClassMemberModifiers(
+export function _tsPrintClassMemberModifiers(
   this: Printer,
   node:
     | t.ClassProperty
     | t.ClassAccessorProperty
+    | t.ClassPrivateProperty
     | t.ClassMethod
     | t.ClassPrivateMethod
     | t.TSDeclareMethod,
 ) {
-  const isField =
+  const isPrivateField = node.type === "ClassPrivateProperty";
+  const isPublicField =
     node.type === "ClassAccessorProperty" || node.type === "ClassProperty";
   printModifiersList(this, node, [
-    isField && node.declare && "declare",
-    node.accessibility,
+    isPublicField && node.declare && "declare",
+    !isPrivateField && node.accessibility,
   ]);
   if (node.static) {
     this.word("static");
     this.space();
   }
   printModifiersList(this, node, [
-    node.override && "override",
-    node.abstract && "abstract",
-    isField && node.readonly && "readonly",
+    !isPrivateField && node.abstract && "abstract",
+    !isPrivateField && node.override && "override",
+    (isPublicField || isPrivateField) && node.readonly && "readonly",
   ]);
 }
 
 function printBraced(printer: Printer, node: t.Node, cb: () => void) {
   printer.token("{");
-  const exit = printer.enterDelimited();
+  const oldNoLineTerminatorAfterNode = printer.enterDelimited();
   cb();
-  exit();
+  printer._noLineTerminatorAfterNode = oldNoLineTerminatorAfterNode;
   printer.rightBrace(node);
 }
 
 function printModifiersList(
   printer: Printer,
   node: t.Node,
-  modifiers: (string | false | null)[],
+  modifiers: (string | false | null | undefined)[],
 ) {
   const modifiersSet = new Set<string>();
   for (const modifier of modifiers) {
@@ -866,6 +796,7 @@ function printModifiersList(
       modifiersSet.delete(tok.value);
       return modifiersSet.size === 0;
     }
+    return false;
   });
 
   for (const modifier of modifiersSet) {

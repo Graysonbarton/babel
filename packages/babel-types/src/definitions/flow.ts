@@ -9,6 +9,7 @@ import {
   validateOptional,
   validateOptionalType,
   validateType,
+  validateDefault,
 } from "./utils.ts";
 
 const defineType = defineAliasedType("Flow");
@@ -87,7 +88,7 @@ defineType("DeclareFunction", {
   aliases: ["FlowDeclaration", "Statement", "Declaration"],
   fields: {
     id: validateType("Identifier"),
-    predicate: validateOptionalType("DeclaredPredicate"),
+    predicate: validateOptionalType("FlowPredicate"),
   },
 });
 
@@ -169,7 +170,7 @@ defineType("DeclaredPredicate", {
   visitor: ["value"],
   aliases: ["FlowPredicate"],
   fields: {
-    value: validateType("Flow"),
+    value: validateType("Expression"),
   },
 });
 
@@ -263,6 +264,14 @@ defineType("NumberLiteralTypeAnnotation", {
   },
 });
 
+defineType("BigIntLiteralTypeAnnotation", {
+  builder: ["value"],
+  aliases: ["FlowType"],
+  fields: {
+    value: validate(assertValueType("bigint")),
+  },
+});
+
 defineType("NumberTypeAnnotation", {
   aliases: ["FlowType", "FlowBaseAnnotation"],
 });
@@ -283,17 +292,17 @@ defineType("ObjectTypeAnnotation", {
     ),
     indexers: {
       validate: arrayOfType("ObjectTypeIndexer"),
-      optional: process.env.BABEL_8_BREAKING ? false : true,
+      optional: false,
       default: [],
     },
     callProperties: {
       validate: arrayOfType("ObjectTypeCallProperty"),
-      optional: process.env.BABEL_8_BREAKING ? false : true,
+      optional: false,
       default: [],
     },
     internalSlots: {
       validate: arrayOfType("ObjectTypeInternalSlot"),
-      optional: process.env.BABEL_8_BREAKING ? false : true,
+      optional: false,
       default: [],
     },
     exact: {
@@ -325,7 +334,7 @@ defineType("ObjectTypeCallProperty", {
   aliases: ["UserWhitespacable"],
   fields: {
     value: validateType("FlowType"),
-    static: validate(assertValueType("boolean")),
+    static: validateDefault(assertValueType("boolean"), false),
   },
 });
 
@@ -337,7 +346,7 @@ defineType("ObjectTypeIndexer", {
     id: validateOptionalType("Identifier"),
     key: validateType("FlowType"),
     value: validateType("FlowType"),
-    static: validate(assertValueType("boolean")),
+    static: validateDefault(assertValueType("boolean"), false),
     variance: validateOptionalType("Variance"),
   },
 });
@@ -346,14 +355,18 @@ defineType("ObjectTypeProperty", {
   visitor: ["key", "value", "variance"],
   aliases: ["UserWhitespacable"],
   fields: {
-    key: validateType("Identifier", "StringLiteral"),
+    key: validateType("Identifier", "StringLiteral", "NumericLiteral"),
     value: validateType("FlowType"),
-    kind: validate(assertOneOf("init", "get", "set")),
-    static: validate(assertValueType("boolean")),
-    proto: validate(assertValueType("boolean")),
-    optional: validate(assertValueType("boolean")),
+    kind: {
+      validate: assertOneOf("init", "get", "set"),
+      default: "init",
+      optional: false,
+    },
+    static: validateDefault(assertValueType("boolean"), false),
+    proto: validateDefault(assertValueType("boolean"), false),
+    optional: validateDefault(assertValueType("boolean"), false),
     variance: validateOptionalType("Variance"),
-    method: validate(assertValueType("boolean")),
+    method: validateDefault(assertValueType("boolean"), false),
   },
 });
 
@@ -417,7 +430,7 @@ defineType("TypeofTypeAnnotation", {
   visitor: ["argument"],
   aliases: ["FlowType"],
   fields: {
-    argument: validateType("FlowType"),
+    argument: validateType("FlowType", "Identifier"),
   },
 });
 
@@ -434,7 +447,7 @@ defineType("TypeAlias", {
 defineType("TypeAnnotation", {
   visitor: ["typeAnnotation"],
   fields: {
-    typeAnnotation: validateType("FlowType"),
+    typeAnnotation: validateType("FlowType", "Identifier"),
   },
 });
 
@@ -448,6 +461,7 @@ defineType("TypeCastExpression", {
 });
 
 defineType("TypeParameter", {
+  builder: ["name", "bound", "default", "variance"],
   visitor: ["bound", "default", "variance"],
   fields: {
     name: validate(assertValueType("string")),
@@ -505,13 +519,17 @@ defineType("EnumDeclaration", {
   },
 });
 
+const enumBodyBase = {
+  explicitType: validateDefault(assertValueType("boolean"), false),
+  hasUnknownMembers: validateDefault(assertValueType("boolean"), false),
+};
+
 defineType("EnumBooleanBody", {
   aliases: ["EnumBody"],
   visitor: ["members"],
   fields: {
-    explicitType: validate(assertValueType("boolean")),
+    ...enumBodyBase,
     members: validateArrayOfType("EnumBooleanMember"),
-    hasUnknownMembers: validate(assertValueType("boolean")),
   },
 });
 
@@ -519,9 +537,8 @@ defineType("EnumNumberBody", {
   aliases: ["EnumBody"],
   visitor: ["members"],
   fields: {
-    explicitType: validate(assertValueType("boolean")),
+    ...enumBodyBase,
     members: validateArrayOfType("EnumNumberMember"),
-    hasUnknownMembers: validate(assertValueType("boolean")),
   },
 });
 
@@ -529,9 +546,8 @@ defineType("EnumStringBody", {
   aliases: ["EnumBody"],
   visitor: ["members"],
   fields: {
-    explicitType: validate(assertValueType("boolean")),
+    ...enumBodyBase,
     members: validateArrayOfType("EnumStringMember", "EnumDefaultedMember"),
-    hasUnknownMembers: validate(assertValueType("boolean")),
   },
 });
 
@@ -540,13 +556,12 @@ defineType("EnumSymbolBody", {
   visitor: ["members"],
   fields: {
     members: validateArrayOfType("EnumDefaultedMember"),
-    hasUnknownMembers: validate(assertValueType("boolean")),
+    hasUnknownMembers: validateDefault(assertValueType("boolean"), false),
   },
 });
 
 defineType("EnumBooleanMember", {
   aliases: ["EnumMember"],
-  builder: ["id"],
   visitor: ["id", "init"],
   fields: {
     id: validateType("Identifier"),
@@ -595,6 +610,6 @@ defineType("OptionalIndexedAccessType", {
   fields: {
     objectType: validateType("FlowType"),
     indexType: validateType("FlowType"),
-    optional: validate(assertValueType("boolean")),
+    optional: validateDefault(assertValueType("boolean"), false),
   },
 });

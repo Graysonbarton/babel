@@ -1,16 +1,13 @@
-if (!process.env.IS_PUBLISH && !USE_ESM && process.env.BABEL_8_BREAKING) {
-  throw new Error(
-    "BABEL_8_BREAKING is only supported in ESM. Please run `make use-esm`.",
-  );
-}
-
-export const version = PACKAGE_JSON.version;
+export const version = process.env.BABEL_9_BREAKING
+  ? PACKAGE_JSON.version.replace(/0*$/, "999999999")
+  : PACKAGE_JSON.version;
 
 export { default as File } from "./transformation/file/file.ts";
 export type { default as PluginPass } from "./transformation/plugin-pass.ts";
 export { default as buildExternalHelpers } from "./tools/build-external-helpers.ts";
 
-import * as resolvers from "./config/files/index.ts";
+// eslint-disable-next-line import/no-unresolved, import/extensions
+import * as resolvers from "#config/files";
 // For backwards-compatibility, we expose the resolvers
 // with the old API.
 export const resolvePlugin = (name: string, dirname: string) =>
@@ -34,6 +31,7 @@ export { default as template } from "@babel/template";
 // TODO: Figure out how to fix this upstream.
 export type { NodePath, Scope } from "@babel/traverse";
 export type Visitor<S = unknown> = import("@babel/traverse").Visitor<S>;
+export type VisitorBase<S = unknown> = import("@babel/traverse").VisitorBase<S>;
 
 export {
   createConfigItem,
@@ -49,16 +47,32 @@ export {
   loadPartialConfigSync,
 } from "./config/index.ts";
 import { loadOptionsSync } from "./config/index.ts";
+import type {
+  ConfigApplicableTest,
+  PluginItem,
+  PresetItem,
+  PluginTarget,
+  PresetTarget,
+} from "./config/validation/options.ts";
 export { loadOptionsSync };
+export type { PluginItem, PresetItem, PluginTarget, PresetTarget };
+
+export type PresetObject = {
+  overrides?: PresetObject[];
+  test?: ConfigApplicableTest;
+  plugins?: PluginItem[];
+};
 
 export type {
   CallerMetadata,
+  ConfigAPI,
   ConfigItem,
   InputOptions,
+  NormalizedOptions,
+  PartialConfig,
   PluginAPI,
   PluginObject,
   PresetAPI,
-  PresetObject,
 } from "./config/index.ts";
 
 export {
@@ -71,7 +85,8 @@ export {
   transformFile,
   transformFileAsync,
   transformFileSync,
-} from "./transform-file.ts";
+  // eslint-disable-next-line import/no-unresolved
+} from "#transform-file";
 export {
   transformFromAst,
   transformFromAstAsync,
@@ -91,28 +106,3 @@ export const DEFAULT_EXTENSIONS = Object.freeze([
   ".mjs",
   ".cjs",
 ] as const);
-
-import Module from "module";
-import * as thisFile from "./index.ts";
-if (USE_ESM && !IS_STANDALONE) {
-  // Pass this module to the CJS proxy, so that it can be synchronously accessed.
-  const cjsProxy = Module.createRequire(import.meta.url)("../cjs-proxy.cjs");
-  cjsProxy["__ initialize @babel/core cjs proxy __"] = thisFile;
-}
-
-if (!process.env.BABEL_8_BREAKING && !USE_ESM) {
-  // For easier backward-compatibility, provide an API like the one we exposed in Babel 6.
-  // eslint-disable-next-line no-restricted-globals
-  exports.OptionManager = class OptionManager {
-    init(opts: any) {
-      return loadOptionsSync(opts);
-    }
-  };
-
-  // eslint-disable-next-line no-restricted-globals
-  exports.Plugin = function Plugin(alias: string) {
-    throw new Error(
-      `The (${alias}) Babel 5 plugin is being run with an unsupported Babel version.`,
-    );
-  };
-}

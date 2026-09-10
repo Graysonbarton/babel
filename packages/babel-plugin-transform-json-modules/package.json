@@ -1,6 +1,6 @@
 {
   "name": "@babel/plugin-transform-json-modules",
-  "version": "7.26.0",
+  "version": "8.0.1",
   "description": "Transform json modules imports (`import '...' with { type: 'json' }`) to work in browsers and Node.js.",
   "repository": {
     "type": "git",
@@ -33,36 +33,19 @@
   ],
   "dependencies": {
     "@babel/helper-import-to-platform-api": "workspace:^",
-    "@babel/helper-plugin-utils": "workspace:^",
-    "@babel/plugin-syntax-import-attributes": "workspace:^"
+    "@babel/helper-plugin-utils": "workspace:^"
   },
   "peerDependencies": {
-    "@babel/core": "^7.22.0"
+    "@babel/core": "^8.0.0"
   },
   "devDependencies": {
     "@babel/core": "workspace:^",
     "@babel/helper-plugin-test-runner": "workspace:^",
-    "babel-plugin-polyfill-corejs3": "^0.10.6"
+    "babel-plugin-polyfill-corejs3": "catalog:"
   },
   "engines": {
-    "node": ">=6.9.0"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "author": "The Babel Team (https://babel.dev/team)",
-  "type": "module",
-  "conditions": {
-    "USE_ESM": [
-      null,
-      {
-        "type": "commonjs"
-      }
-    ],
-    "BABEL_8_BREAKING": [
-      {
-        "engines": {
-          "node": "^18.20.0 || ^20.17.0 || >=22.8.0"
-        }
-      },
-      {}
-    ]
-  }
+  "type": "module"
 }

@@ -16,14 +16,11 @@ bundler handle dynamic imports.
 `;
 
 export default declare(api => {
-  api.assertVersion(REQUIRED_VERSION(7));
+  api.assertVersion(REQUIRED_VERSION("^7.0.0-0 || ^8.0.0"));
 
   return {
     name: "transform-dynamic-import",
-    manipulateOptions: process.env.BABEL_8_BREAKING
-      ? undefined
-      : (_, parser) => parser.plugins.push("dynamicImport"),
-
+    manipulateOptions: undefined,
     pre() {
       // We keep using the old name, for compatibility with older
       // version of the CommonJS transform.

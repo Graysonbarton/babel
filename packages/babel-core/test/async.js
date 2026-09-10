@@ -1,23 +1,6 @@
-import path from "path";
-import { fileURLToPath } from "url";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as babel from "../lib/index.js";
-
-import {
-  spawnTransformAsync,
-  spawnTransformAsyncParallel,
-  spawnTransformSync,
-  supportsESM,
-} from "./helpers/esm.js";
-
-import { itGte, itESM, itLt } from "$repo-utils";
-
-// "minNodeVersion": "8.0.0" <-- For Ctrl+F when dropping node 6
-const nodeGte8 = itGte("8.0.0");
-const nodeGte14 = itGte("14.8.0");
-
-// "minNodeVersion": "22.0.0" <-- For Ctrl+F when dropping node 20
-const nodeGte22_12 = itGte("22.12.0");
-const nodeLt22_12 = itLt("22.12.0");
 
 describe("asynchronicity", () => {
   const base = path.join(
@@ -38,7 +21,7 @@ describe("asynchronicity", () => {
 
   describe("config file", () => {
     describe("async function", () => {
-      nodeGte8("called synchronously", () => {
+      it("called synchronously", () => {
         process.chdir("config-file-async-function");
 
         expect(() =>
@@ -51,7 +34,7 @@ describe("asynchronicity", () => {
         );
       });
 
-      nodeGte8("called asynchronously", async () => {
+      it("called asynchronously", async () => {
         process.chdir("config-file-async-function");
 
         await expect(
@@ -94,7 +77,7 @@ describe("asynchronicity", () => {
     });
 
     describe("cache.using", () => {
-      nodeGte8("called synchronously", () => {
+      it("called synchronously", () => {
         process.chdir("config-cache");
 
         expect(() =>
@@ -107,7 +90,7 @@ describe("asynchronicity", () => {
         );
       });
 
-      nodeGte8("called asynchronously", async () => {
+      it("called asynchronously", async () => {
         process.chdir("config-cache");
 
         await expect(
@@ -121,7 +104,7 @@ describe("asynchronicity", () => {
       });
     });
 
-    itESM("mjs configuring cache", async () => {
+    it("mjs configuring cache", async () => {
       process.chdir("config-file-mjs-cache");
 
       const { code } = await babel.transformAsync("");
@@ -132,7 +115,7 @@ describe("asynchronicity", () => {
 
   describe("plugin", () => {
     describe("factory function", () => {
-      nodeGte8("called synchronously", () => {
+      it("called synchronously", () => {
         process.chdir("plugin");
 
         expect(() => babel.transformSync("")).toThrow(
@@ -141,7 +124,7 @@ describe("asynchronicity", () => {
         );
       });
 
-      nodeGte8("called asynchronously", async () => {
+      it("called asynchronously", async () => {
         process.chdir("plugin");
 
         await expect(babel.transformAsync("")).resolves.toMatchObject({
@@ -151,7 +134,7 @@ describe("asynchronicity", () => {
     });
 
     describe(".pre", () => {
-      nodeGte8("called synchronously", () => {
+      it("called synchronously", () => {
         process.chdir("plugin-pre");
 
         expect(() =>
@@ -161,7 +144,7 @@ describe("asynchronicity", () => {
         );
       });
 
-      nodeGte8("called asynchronously", async () => {
+      it("called asynchronously", async () => {
         process.chdir("plugin-pre");
 
         await expect(babel.transformAsync("")).resolves.toMatchObject({
@@ -169,7 +152,7 @@ describe("asynchronicity", () => {
         });
       });
 
-      nodeGte8("should await inherited .pre", async () => {
+      it("should await inherited .pre", async () => {
         process.chdir("plugin-pre-chaining");
 
         await expect(babel.transformAsync("")).resolves.toMatchObject({
@@ -179,7 +162,7 @@ describe("asynchronicity", () => {
     });
 
     describe(".post", () => {
-      nodeGte8("called synchronously", () => {
+      it("called synchronously", () => {
         process.chdir("plugin-post");
 
         expect(() =>
@@ -189,7 +172,7 @@ describe("asynchronicity", () => {
         );
       });
 
-      nodeGte8("called asynchronously", async () => {
+      it("called asynchronously", async () => {
         process.chdir("plugin-post");
 
         await expect(babel.transformAsync("")).resolves.toMatchObject({
@@ -197,7 +180,7 @@ describe("asynchronicity", () => {
         });
       });
 
-      nodeGte8("should await inherited .post", async () => {
+      it("should await inherited .post", async () => {
         process.chdir("plugin-post-chaining");
 
         await expect(babel.transformAsync("")).resolves.toMatchObject({
@@ -207,7 +190,7 @@ describe("asynchronicity", () => {
     });
 
     describe("PluginPass.isAsync", () => {
-      nodeGte8("called synchronously", () => {
+      it("called synchronously", () => {
         process.chdir("plugin-pass-is-async");
 
         expect(babel.transformSync("")).toMatchObject({
@@ -215,7 +198,7 @@ describe("asynchronicity", () => {
         });
       });
 
-      nodeGte8("called asynchronously", async () => {
+      it("called asynchronously", async () => {
         process.chdir("plugin-pass-is-async");
 
         await expect(babel.transformAsync("")).resolves.toMatchObject({
@@ -223,7 +206,7 @@ describe("asynchronicity", () => {
         });
       });
 
-      nodeGte8("should await inherited .pre", async () => {
+      it("should await inherited .pre", async () => {
         process.chdir("plugin-pre-chaining");
 
         await expect(babel.transformAsync("")).resolves.toMatchObject({
@@ -233,7 +216,7 @@ describe("asynchronicity", () => {
     });
 
     describe("inherits", () => {
-      nodeGte8("called synchronously", () => {
+      it("called synchronously", () => {
         process.chdir("plugin-inherits");
 
         expect(() => babel.transformSync("")).toThrow(
@@ -242,7 +225,7 @@ describe("asynchronicity", () => {
         );
       });
 
-      nodeGte8("called asynchronously", async () => {
+      it("called asynchronously", async () => {
         process.chdir("plugin-inherits");
 
         await expect(babel.transformAsync("")).resolves.toMatchObject({
@@ -251,20 +234,11 @@ describe("asynchronicity", () => {
       });
     });
 
-    (supportsESM ? describe : describe.skip)(".mjs files", () => {
-      nodeLt22_12("called synchronously", async () => {
+    describe(".mjs files", () => {
+      it("called synchronously", async () => {
         process.chdir("plugin-mjs-native");
 
-        await expect(spawnTransformSync()).rejects.toThrow(
-          `[BABEL]: You appear to be using a native ECMAScript module plugin, which is` +
-            ` only supported when running Babel asynchronously`,
-        );
-      });
-
-      nodeGte22_12("called asynchronously", async () => {
-        process.chdir("plugin-mjs-native");
-
-        await expect(spawnTransformSync()).resolves.toMatchObject({
+        expect(babel.transformSync("")).toMatchObject({
           code: `"success"`,
         });
       });
@@ -272,36 +246,35 @@ describe("asynchronicity", () => {
       it("called asynchronously", async () => {
         process.chdir("plugin-mjs-native");
 
-        await expect(spawnTransformAsync()).resolves.toMatchObject({
+        await expect(babel.transformAsync("")).resolves.toMatchObject({
           code: `"success"`,
         });
       });
 
-      nodeGte14("called asynchronously when contain TLA", async () => {
+      it("called asynchronously when contain TLA", async () => {
         process.chdir("plugin-mjs-tla-native");
 
-        await expect(spawnTransformAsync()).resolves.toMatchObject({
+        await expect(babel.transformAsync("")).resolves.toMatchObject({
           code: `"success"`,
         });
       });
 
-      nodeGte14(
-        "called asynchronously twice in parallel when contain TLA",
-        async () => {
-          process.chdir("config-mjs-tla-native");
+      it("called asynchronously twice in parallel when contain TLA", async () => {
+        process.chdir("config-mjs-tla-native");
 
-          await expect(spawnTransformAsyncParallel()).resolves.toMatchObject([
-            { code: `"success"` },
-            { code: `"success"` },
-          ]);
-        },
-      );
+        await expect(
+          Promise.all([babel.transformAsync(""), babel.transformAsync("")]),
+        ).resolves.toMatchObject([
+          { code: `"success"` },
+          { code: `"success"` },
+        ]);
+      });
     });
   });
 
   describe("preset", () => {
     describe("factory function", () => {
-      nodeGte8("called synchronously", () => {
+      it("called synchronously", () => {
         process.chdir("preset");
 
         expect(() => babel.transformSync("")).toThrow(
@@ -310,7 +283,7 @@ describe("asynchronicity", () => {
         );
       });
 
-      nodeGte8("called asynchronously", async () => {
+      it("called asynchronously", async () => {
         process.chdir("preset");
 
         await expect(babel.transformAsync("")).resolves.toMatchObject({
@@ -320,7 +293,7 @@ describe("asynchronicity", () => {
     });
 
     describe("plugins", () => {
-      nodeGte8("called synchronously", () => {
+      it("called synchronously", () => {
         process.chdir("preset-plugin-promise");
 
         expect(() => babel.transformSync("")).toThrow(
@@ -331,7 +304,7 @@ describe("asynchronicity", () => {
         );
       });
 
-      nodeGte8("called asynchronously", async () => {
+      it("called asynchronously", async () => {
         process.chdir("preset-plugin-promise");
 
         await expect(babel.transformAsync("")).rejects.toThrow(
@@ -343,20 +316,11 @@ describe("asynchronicity", () => {
       });
     });
 
-    (supportsESM ? describe : describe.skip)(".mjs files", () => {
-      nodeLt22_12("called synchronously", async () => {
+    describe(".mjs files", () => {
+      it("called synchronously", async () => {
         process.chdir("preset-mjs-native");
 
-        await expect(spawnTransformSync()).rejects.toThrow(
-          `[BABEL]: You appear to be using a native ECMAScript module preset, which is` +
-            ` only supported when running Babel asynchronously`,
-        );
-      });
-
-      nodeGte22_12("called synchronously", async () => {
-        process.chdir("preset-mjs-native");
-
-        await expect(spawnTransformSync()).resolves.toMatchObject({
+        expect(babel.transformSync("")).toMatchObject({
           code: `"success"`,
         });
       });
@@ -364,7 +328,7 @@ describe("asynchronicity", () => {
       it("called asynchronously", async () => {
         process.chdir("preset-mjs-native");
 
-        await expect(spawnTransformAsync()).resolves.toMatchObject({
+        await expect(babel.transformAsync("")).resolves.toMatchObject({
           code: `"success"`,
         });
       });
@@ -372,7 +336,7 @@ describe("asynchronicity", () => {
       it("must use the 'default' export", async () => {
         process.chdir("preset-mjs-named-exports-native");
 
-        await expect(spawnTransformAsync()).rejects.toThrow(
+        await expect(babel.transformAsync("")).rejects.toThrow(
           `Unexpected falsy value: undefined`,
         );
       });

@@ -6,7 +6,7 @@ import { visitors } from "@babel/traverse";
 import rewriteForAwait from "./for-await.ts";
 
 export default declare(api => {
-  api.assertVersion(REQUIRED_VERSION(7));
+  api.assertVersion(REQUIRED_VERSION("^7.0.0-0 || ^8.0.0"));
 
   const yieldStarVisitor = visitors.environmentVisitor<PluginPass>({
     ArrowFunctionExpression(path) {
@@ -16,13 +16,12 @@ export default declare(api => {
     YieldExpression({ node }, state) {
       if (!node.delegate) return;
       const asyncIter = t.callExpression(state.addHelper("asyncIterator"), [
-        node.argument,
+        node.argument!,
       ]);
       node.argument = t.callExpression(
         state.addHelper("asyncGeneratorDelegate"),
-        process.env.BABEL_8_BREAKING
-          ? [asyncIter]
-          : [asyncIter, state.addHelper("awaitAsyncGenerator")],
+
+        [asyncIter],
       );
     },
   });
@@ -63,7 +62,7 @@ export default declare(api => {
       p.replaceWithMultiple(build.node);
 
       // TODO: Avoid crawl
-      p.scope.parent.crawl();
+      p.scope.parent!.crawl();
     },
   });
 
@@ -94,10 +93,7 @@ export default declare(api => {
   return {
     name: "transform-async-generator-functions",
 
-    manipulateOptions: process.env.BABEL_8_BREAKING
-      ? undefined
-      : (_, parser) => parser.plugins.push("asyncGenerators"),
-
+    manipulateOptions: undefined,
     visitor: {
       Program(path, state) {
         // We need to traverse the ast here (instead of just vising Function

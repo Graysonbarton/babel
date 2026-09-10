@@ -9,6 +9,7 @@ import {
 } from "@babel/types";
 import type * as t from "@babel/types";
 import { TokenContext } from "../node/index.ts";
+import { _shouldPrintDecoratorsBeforeExport } from "./expressions.ts";
 
 export function ImportSpecifier(this: Printer, node: t.ImportSpecifier) {
   if (node.importKind === "type" || node.importKind === "typeof") {
@@ -67,58 +68,23 @@ export function ExportNamespaceSpecifier(
   this.print(node.exported);
 }
 
-let warningShown = false;
-
 export function _printAttributes(
   this: Printer,
-  node: Extract<t.Node, { attributes?: t.ImportAttribute[] }>,
+  node: Extract<t.Node, { attributes?: t.ImportAttribute[] | null }>,
   hasPreviousBrace: boolean,
 ) {
-  const { importAttributesKeyword } = this.format;
-  const { attributes, assertions } = node;
+  const { attributes } = node;
 
-  if (
-    !process.env.BABEL_8_BREAKING &&
-    attributes &&
-    !importAttributesKeyword &&
-    // In the production build only show the warning once.
-    // We want to show it per-usage locally for tests.
-    (!process.env.IS_PUBLISH || !warningShown)
-  ) {
-    warningShown = true;
-    console.warn(`\
-You are using import attributes, without specifying the desired output syntax.
-Please specify the "importAttributesKeyword" generator option, whose value can be one of:
- - "with"        : \`import { a } from "b" with { type: "json" };\`
- - "assert"      : \`import { a } from "b" assert { type: "json" };\`
- - "with-legacy" : \`import { a } from "b" with type: "json";\`
-`);
-  }
-
-  const useAssertKeyword =
-    importAttributesKeyword === "assert" ||
-    (!importAttributesKeyword && assertions);
-
-  this.word(useAssertKeyword ? "assert" : "with");
+  this.word("with");
   this.space();
-
-  if (
-    !process.env.BABEL_8_BREAKING &&
-    !useAssertKeyword &&
-    importAttributesKeyword !== "with"
-  ) {
-    // with-legacy
-    this.printList(attributes || assertions);
-    return;
-  }
 
   const occurrenceCount = hasPreviousBrace ? 1 : 0;
 
-  this.token("{", null, occurrenceCount);
+  this.token("{", undefined, occurrenceCount);
   this.space();
-  this.printList(attributes || assertions, this.shouldPrintTrailingComma("}"));
+  this.printList(attributes, this.shouldPrintTrailingComma("}"));
   this.space();
-  this.token("}", null, occurrenceCount);
+  this.token("}", undefined, occurrenceCount);
 }
 
 export function ExportAllDeclaration(
@@ -135,10 +101,10 @@ export function ExportAllDeclaration(
   this.space();
   this.word("from");
   this.space();
-  if (node.attributes?.length || node.assertions?.length) {
+  if (node.attributes?.length) {
     this.print(node.source, true);
     this.space();
-    this._printAttributes(node, false);
+    _printAttributes.call(this, node, false);
   } else {
     this.print(node.source);
   }
@@ -152,7 +118,8 @@ function maybePrintDecoratorsBeforeExport(
 ) {
   if (
     isClassDeclaration(node.declaration) &&
-    printer._shouldPrintDecoratorsBeforeExport(
+    _shouldPrintDecoratorsBeforeExport.call(
+      printer,
       node as t.ExportNamedDeclaration & { declaration: t.ClassDeclaration },
     )
   ) {
@@ -215,10 +182,10 @@ export function ExportNamedDeclaration(
       this.space();
       this.word("from");
       this.space();
-      if (node.attributes?.length || node.assertions?.length) {
+      if (node.attributes?.length) {
         this.print(node.source, true);
         this.space();
-        this._printAttributes(node, hasBrace);
+        _printAttributes.call(this, node, hasBrace);
       } else {
         this.print(node.source);
       }
@@ -252,7 +219,7 @@ export function ImportDeclaration(this: Printer, node: t.ImportDeclaration) {
   const isTypeKind = node.importKind === "type" || node.importKind === "typeof";
   if (isTypeKind) {
     this.noIndentInnerCommentsHere();
-    this.word(node.importKind);
+    this.word(node.importKind!);
     this.space();
   } else if (node.module) {
     this.noIndentInnerCommentsHere();
@@ -301,10 +268,10 @@ export function ImportDeclaration(this: Printer, node: t.ImportDeclaration) {
     this.space();
   }
 
-  if (node.attributes?.length || node.assertions?.length) {
+  if (node.attributes?.length) {
     this.print(node.source, true);
     this.space();
-    this._printAttributes(node, hasBrace);
+    _printAttributes.call(this, node, hasBrace);
   } else {
     this.print(node.source);
   }
@@ -337,11 +304,15 @@ export function ImportExpression(this: Printer, node: t.ImportExpression) {
     this.word(node.phase);
   }
   this.token("(");
+  const shouldPrintTrailingComma = this.shouldPrintTrailingComma(")");
   this.print(node.source);
   if (node.options != null) {
     this.token(",");
     this.space();
     this.print(node.options);
   }
-  this.token(")");
+  if (shouldPrintTrailingComma) {
+    this.token(",");
+  }
+  this.rightParens(node);
 }

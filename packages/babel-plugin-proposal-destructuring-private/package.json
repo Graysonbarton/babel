@@ -1,6 +1,6 @@
 {
   "name": "@babel/plugin-proposal-destructuring-private",
-  "version": "7.26.0",
+  "version": "8.0.5",
   "description": "Transform destructuring private proposal",
   "repository": {
     "type": "git",
@@ -21,12 +21,11 @@
     "@babel/plugin-transform-parameters": "workspace:^"
   },
   "peerDependencies": {
-    "@babel/core": "^7.17.0"
+    "@babel/core": "^8.0.0"
   },
   "devDependencies": {
     "@babel/core": "workspace:^",
     "@babel/helper-plugin-test-runner": "workspace:^",
-    "@babel/plugin-syntax-decimal": "condition:BABEL_8_BREAKING ? : ^7.24.7",
     "@babel/plugin-transform-class-properties": "workspace:^",
     "@babel/plugin-transform-class-static-block": "workspace:^",
     "@babel/traverse": "workspace:^",
@@ -34,7 +33,7 @@
   },
   "homepage": "https://babel.dev/docs/en/next/babel-plugin-proposal-destructuring-private",
   "engines": {
-    "node": ">=6.9.0"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "author": "The Babel Team (https://babel.dev/team)",
   "exports": {
@@ -44,21 +43,5 @@
     },
     "./package.json": "./package.json"
   },
-  "type": "module",
-  "conditions": {
-    "USE_ESM": [
-      null,
-      {
-        "type": "commonjs"
-      }
-    ],
-    "BABEL_8_BREAKING": [
-      {
-        "engines": {
-          "node": "^18.20.0 || ^20.17.0 || >=22.8.0"
-        }
-      },
-      {}
-    ]
-  }
+  "type": "module"
 }

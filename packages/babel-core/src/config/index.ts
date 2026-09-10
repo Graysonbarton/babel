@@ -7,8 +7,12 @@ export type {
   Plugin,
 } from "./full.ts";
 
-import type { InputOptions, PluginTarget } from "./validation/options.ts";
-
+import type {
+  InputOptions,
+  PluginTarget,
+  ResolvedOptions,
+} from "./validation/options.ts";
+export type { ConfigAPI } from "./helpers/config-api.ts";
 import type {
   PluginAPI as basePluginAPI,
   PresetAPI as basePresetAPI,
@@ -17,13 +21,12 @@ export type { PluginObject } from "./validation/plugins.ts";
 type PluginAPI = basePluginAPI & typeof import("..");
 type PresetAPI = basePresetAPI & typeof import("..");
 export type { PluginAPI, PresetAPI };
-// todo: may need to refine PresetObject to be a subset of ValidatedOptions
 export type {
   CallerMetadata,
-  ValidatedOptions as PresetObject,
+  NormalizedOptions,
 } from "./validation/options.ts";
 
-import loadFullConfig, { type ResolvedConfig } from "./full.ts";
+import loadFullConfig from "./full.ts";
 import {
   type PartialConfig,
   loadPartialConfig as loadPartialConfigImpl,
@@ -61,17 +64,15 @@ export function loadPartialConfig(
       opts as (err: Error, val: PartialConfig | null) => void,
     );
   } else {
-    if (process.env.BABEL_8_BREAKING) {
-      throw new Error(
-        "Starting from Babel 8.0.0, the 'loadPartialConfig' function expects a callback. If you need to call it synchronously, please use 'loadPartialConfigSync'.",
-      );
-    } else {
-      return loadPartialConfigSync(opts);
-    }
+    throw new Error(
+      "Starting from Babel 8.0.0, the 'loadPartialConfig' function expects a callback. If you need to call it synchronously, please use 'loadPartialConfigSync'.",
+    );
   }
 }
 
-function* loadOptionsImpl(opts: InputOptions): Handler<ResolvedConfig | null> {
+function* loadOptionsImpl(
+  opts: InputOptions | null | undefined,
+): Handler<ResolvedOptions | null> {
   const config = yield* loadFullConfig(opts);
   // NOTE: We want to return "null" explicitly, while ?. alone returns undefined
   return config?.options ?? null;
@@ -89,23 +90,19 @@ export function loadOptionsSync(
 }
 export function loadOptions(
   opts: Parameters<typeof loadOptionsImpl>[0],
-  callback?: (err: Error, val: ResolvedConfig | null) => void,
+  callback?: (err: Error, val: ResolvedOptions | null) => void,
 ) {
   if (callback !== undefined) {
     beginHiddenCallStack(loadOptionsRunner.errback)(opts, callback);
   } else if (typeof opts === "function") {
     beginHiddenCallStack(loadOptionsRunner.errback)(
       undefined,
-      opts as (err: Error, val: ResolvedConfig | null) => void,
+      opts as (err: Error, val: ResolvedOptions | null) => void,
     );
   } else {
-    if (process.env.BABEL_8_BREAKING) {
-      throw new Error(
-        "Starting from Babel 8.0.0, the 'loadOptions' function expects a callback. If you need to call it synchronously, please use 'loadOptionsSync'.",
-      );
-    } else {
-      return loadOptionsSync(opts);
-    }
+    throw new Error(
+      "Starting from Babel 8.0.0, the 'loadOptions' function expects a callback. If you need to call it synchronously, please use 'loadOptionsSync'.",
+    );
   }
 }
 
@@ -135,15 +132,11 @@ export function createConfigItem(
     beginHiddenCallStack(createConfigItemRunner.errback)(
       target,
       undefined,
-      callback,
+      callback!,
     );
   } else {
-    if (process.env.BABEL_8_BREAKING) {
-      throw new Error(
-        "Starting from Babel 8.0.0, the 'createConfigItem' function expects a callback. If you need to call it synchronously, please use 'createConfigItemSync'.",
-      );
-    } else {
-      return createConfigItemSync(target, options);
-    }
+    throw new Error(
+      "Starting from Babel 8.0.0, the 'createConfigItem' function expects a callback. If you need to call it synchronously, please use 'createConfigItemSync'.",
+    );
   }
 }

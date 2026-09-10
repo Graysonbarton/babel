@@ -7,11 +7,11 @@ export class TokenMap {
   _tokens: Token[];
   _source: string;
 
-  _nodesToTokenIndexes: Map<t.Node, number[]> = new Map();
-  _nodesOccurrencesCountCache: Map<
+  _nodesToTokenIndexes = new Map<t.Node, number[]>();
+  _nodesOccurrencesCountCache = new Map<
     t.Node,
     { test: string; count: number; i: number }
-  > = new Map();
+  >();
 
   _tokensCache = new Map<t.Node, { first: number; last: number }>();
 
@@ -24,7 +24,7 @@ export class TokenMap {
       if (indexes.length > 0) this._nodesToTokenIndexes.set(node, indexes);
     });
 
-    this._tokensCache = null;
+    this._tokensCache.clear();
   }
 
   has(node: t.Node): boolean {
@@ -67,11 +67,14 @@ export class TokenMap {
 
   findMatching(
     node: t.Node,
-    test: string,
+    test: string | number,
     occurrenceCount: number = 0,
   ): Token | null {
     const indexes = this._nodesToTokenIndexes.get(node);
     if (indexes) {
+      if (typeof test === "number") {
+        test = String.fromCharCode(test);
+      }
       let i = 0;
       const count = occurrenceCount;
 
@@ -83,7 +86,7 @@ export class TokenMap {
       // overhead in the simple case of having unique tokens per node.
       if (count > 1) {
         const cache = this._nodesOccurrencesCountCache.get(node);
-        if (cache && cache.test === test && cache.count < count) {
+        if (cache?.test === test && cache.count < count) {
           i = cache.i + 1;
           occurrenceCount -= cache.count + 1;
         }
@@ -143,8 +146,7 @@ export class TokenMap {
     if (
       (node.type === "ExportNamedDeclaration" ||
         node.type === "ExportDefaultDeclaration") &&
-      node.declaration &&
-      node.declaration.type === "ClassDeclaration"
+      node.declaration?.type === "ClassDeclaration"
     ) {
       // Exported class declarations can be not properly nested inside
       // the export declaration that contains them. For example, in
@@ -178,8 +180,8 @@ export class TokenMap {
     const cached = this._tokensCache.get(node);
     if (cached) return cached;
 
-    const first = this._findFirstTokenOfNode(node.start, low, high);
-    const last = this._findLastTokenOfNode(node.end, first, high);
+    const first = this._findFirstTokenOfNode(node.start!, low, high);
+    const last = this._findLastTokenOfNode(node.end!, first, high);
 
     this._tokensCache.set(node, { first, last });
     return { first, last };

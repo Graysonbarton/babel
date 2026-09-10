@@ -2,7 +2,7 @@ import { declare } from "@babel/helper-plugin-utils";
 import type { types as t, Scope } from "@babel/core";
 
 export default declare(api => {
-  api.assertVersion(REQUIRED_VERSION(7));
+  api.assertVersion(REQUIRED_VERSION("^7.0.0-0 || ^8.0.0"));
 
   const { types: t, template } = api;
 
@@ -34,7 +34,6 @@ export default declare(api => {
         t.cloneNode(id),
         // This is not t.Super, because otherwise the .isStatic check above
         // would have returned true.
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
         node as t.Expression,
       ),
       ref: t.cloneNode(id),
@@ -65,7 +64,7 @@ export default declare(api => {
           const { property, computed } = node.left;
 
           if (computed) {
-            const prop = maybeMemoize(property as t.Expression, scope);
+            const prop = maybeMemoize(property, scope)!;
             member1 = t.memberExpression(object.assign, prop.assign, true);
             member2 = t.memberExpression(object.ref, prop.ref, true);
           } else {
@@ -98,13 +97,7 @@ export default declare(api => {
       BinaryExpression(path) {
         const { node } = path;
         if (node.operator === "**") {
-          path.replaceWith(
-            build(
-              // left can be PrivateName only if operator is `"in"`
-              node.left as t.Expression,
-              node.right,
-            ),
-          );
+          path.replaceWith(build(node.left, node.right));
         }
       },
     },

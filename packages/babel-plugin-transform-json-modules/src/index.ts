@@ -1,9 +1,8 @@
 import { declare } from "@babel/helper-plugin-utils";
 import type { types as t, File } from "@babel/core";
-import syntaxImportAttributes from "@babel/plugin-syntax-import-attributes";
 import {
   importToPlatformApi,
-  buildParallelStaticImports,
+  injectParallelStaticImports,
   type Pieces,
   type Builders,
 } from "@babel/helper-import-to-platform-api";
@@ -14,7 +13,7 @@ export interface Options {
 
 export default declare((api, options: Options) => {
   const { types: t, template } = api;
-  api.assertVersion(REQUIRED_VERSION("^7.22.0"));
+  api.assertVersion(REQUIRED_VERSION("^7.22.0 || ^8.0.0"));
 
   const targets = api.targets();
 
@@ -25,7 +24,7 @@ export default declare((api, options: Options) => {
     commonJS: options.uncheckedRequire
       ? (require: t.Expression, specifier: t.Expression) =>
           t.callExpression(require, [specifier])
-      : null,
+      : undefined,
     webFetch: (fetch: t.Expression) =>
       template.expression.ast`${fetch}.then(r => r.json())`,
     nodeFsSync: (read: t.Expression) =>
@@ -51,7 +50,9 @@ export default declare((api, options: Options) => {
     return t.isIdentifier(key) ? key.name : key.value;
   }
 
-  function hasTypeJson(attributes: t.ImportAttribute[]) {
+  function hasTypeJson(
+    attributes: t.ImportAttribute[] | undefined,
+  ): attributes is t.ImportAttribute[] {
     return !!attributes?.some(
       attr => getAttributeKey(attr) === "type" && attr.value.value === "json",
     );
@@ -59,8 +60,6 @@ export default declare((api, options: Options) => {
 
   return {
     name: "transform-json-modules",
-
-    inherits: syntaxImportAttributes,
 
     visitor: {
       Program(path) {
@@ -71,7 +70,7 @@ export default declare((api, options: Options) => {
         const data = [];
         for (const decl of path.get("body")) {
           if (!decl.isImportDeclaration()) continue;
-          const attributes = decl.node.attributes || decl.node.assertions;
+          const attributes = decl.node.attributes || undefined;
           if (!hasTypeJson(attributes)) continue;
 
           if (decl.node.phase != null) {
@@ -80,9 +79,7 @@ export default declare((api, options: Options) => {
             );
           }
           if (attributes.length > 1) {
-            const paths = decl.node.attributes
-              ? decl.get("attributes")
-              : decl.get("assertions");
+            const paths = decl.get("attributes");
             const index = getAttributeKey(attributes[0]) === "type" ? 1 : 0;
             throw paths[index].buildCodeFrameError(
               "Unknown attribute for JSON modules.",
@@ -103,7 +100,7 @@ export default declare((api, options: Options) => {
           }
           id ??= path.scope.generateUidIdentifier("_");
 
-          let fetch = helper.buildFetch(decl.node.source, path);
+          let fetch = helper.buildFetch(decl.node.source, this.file);
 
           if (needsNS) {
             if (helper.needsAwait) {
@@ -118,10 +115,8 @@ export default declare((api, options: Options) => {
           data.push({ id, fetch });
           decl.remove();
         }
-        if (data.length === 0) return;
 
-        const decl = buildParallelStaticImports(data, helper.needsAwait);
-        if (decl) path.unshiftContainer("body", decl);
+        injectParallelStaticImports(path, data, helper.needsAwait);
       },
     },
   };

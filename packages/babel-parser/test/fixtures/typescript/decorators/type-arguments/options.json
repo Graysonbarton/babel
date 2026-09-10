@@ -1,12 +1,6 @@
 {
   "plugins": [
     "typescript",
-    [
-      "decorators",
-      {
-        "decoratorsBeforeExport": true
-      }
-    ]
-  ],
-  "BABEL_8_BREAKING": true
+    "decorators"
+  ]
 }

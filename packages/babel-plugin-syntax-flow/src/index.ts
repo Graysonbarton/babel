@@ -5,7 +5,7 @@ export interface Options {
 }
 
 export default declare((api, options: Options) => {
-  api.assertVersion(REQUIRED_VERSION(7));
+  api.assertVersion(REQUIRED_VERSION("^7.0.0-0 || ^8.0.0"));
 
   // When enabled and plugins includes flow, all files should be parsed as if
   // the @flow pragma was provided.
@@ -16,42 +16,17 @@ export default declare((api, options: Options) => {
     throw new Error(".all must be a boolean, or undefined");
   }
 
-  if (process.env.BABEL_8_BREAKING) {
-    if (enums !== undefined) {
-      throw new Error(
-        "The .enums option has been removed and it's now always enabled. Please remove it from your config.",
-      );
-    }
-  } else {
-    if (enums === false) {
-      console.warn(
-        "The .enums option has been removed and it's now always enabled.",
-      );
-    }
+  if (enums !== undefined) {
+    throw new Error(
+      "The .enums option has been removed and it's now always enabled. Please remove it from your config.",
+    );
   }
 
   return {
     name: "syntax-flow",
 
     manipulateOptions(opts, parserOpts) {
-      if (!process.env.BABEL_8_BREAKING) {
-        // If the file has already enabled TS, assume that this is not a
-        // valid Flowtype file.
-        if (
-          parserOpts.plugins.some(
-            p => (Array.isArray(p) ? p[0] : p) === "typescript",
-          )
-        ) {
-          return;
-        }
-      }
-
-      if (process.env.BABEL_8_BREAKING) {
-        parserOpts.plugins.push(["flow", { all }]);
-      } else {
-        // @ts-expect-error Babel 7
-        parserOpts.plugins.push(["flow", { all, enums }]);
-      }
+      parserOpts.plugins.push(["flow", { all }]);
     },
   };
 });

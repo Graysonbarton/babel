@@ -1,7 +1,17 @@
 {
-  "targets": { "chrome": 96 },
-  "presets": [["env", {
-    "debug": true,
-    "exclude": ["bugfix/transform-v8-static-class-fields-redefine-readonly"]
-  }]]
+  "targets": {
+    "chrome": 96
+  },
+  "validateLogs": true,
+  "presets": [
+    [
+      "env",
+      {
+        "debug": true,
+        "exclude": [
+          "bugfix/transform-v8-static-class-fields-redefine-readonly"
+        ]
+      }
+    ]
+  ]
 }

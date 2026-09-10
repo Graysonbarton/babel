@@ -1,7 +1,5 @@
 /* eslint sort-keys: "error" */
 
-import otherBabel7Plugins from "./babel-7-available-plugins.cjs";
-
 import transformAsyncGeneratorFunctions from "@babel/plugin-transform-async-generator-functions";
 import transformAsyncToGenerator from "@babel/plugin-transform-async-to-generator";
 import transformArrowFunctions from "@babel/plugin-transform-arrow-functions";
@@ -16,6 +14,7 @@ import transformDotallRegex from "@babel/plugin-transform-dotall-regex";
 import transformDuplicateKeys from "@babel/plugin-transform-duplicate-keys";
 import transformDuplicateNamedCapturingGroupsRegex from "@babel/plugin-transform-duplicate-named-capturing-groups-regex";
 import transformDynamicImport from "@babel/plugin-transform-dynamic-import";
+import transformExplicitResourceManagement from "@babel/plugin-transform-explicit-resource-management";
 import transformExponentialOperator from "@babel/plugin-transform-exponentiation-operator";
 import transformExportNamespaceFrom from "@babel/plugin-transform-export-namespace-from";
 import transformForOf from "@babel/plugin-transform-for-of";
@@ -61,6 +60,7 @@ import bugfixTaggedTemplateCaching from "@babel/preset-modules/lib/plugins/trans
 import bugfixSafariBlockShadowing from "@babel/preset-modules/lib/plugins/transform-safari-block-shadowing/index.js";
 import bugfixSafariForShadowing from "@babel/preset-modules/lib/plugins/transform-safari-for-shadowing/index.js";
 import bugfixSafariIdDestructuringCollisionInFunctionExpression from "@babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression";
+import bugfixSafariRestDestructuringRhsArray from "@babel/plugin-bugfix-safari-rest-destructuring-rhs-array";
 import bugfixSafariClassFieldInitializerScope from "@babel/plugin-bugfix-safari-class-field-initializer-scope";
 import bugfixV8SpreadParametersInOptionalChaining from "@babel/plugin-bugfix-v8-spread-parameters-in-optional-chaining";
 import bugfixV8StaticClassFieldsRedefineReadonly from "@babel/plugin-bugfix-v8-static-class-fields-redefine-readonly";
@@ -78,6 +78,8 @@ const availablePlugins = {
   "bugfix/transform-safari-for-shadowing": () => bugfixSafariForShadowing,
   "bugfix/transform-safari-id-destructuring-collision-in-function-expression":
     () => bugfixSafariIdDestructuringCollisionInFunctionExpression,
+  "bugfix/transform-safari-rest-destructuring-rhs-array": () =>
+    bugfixSafariRestDestructuringRhsArray,
   "bugfix/transform-tagged-template-caching": () => bugfixTaggedTemplateCaching,
   "bugfix/transform-v8-spread-parameters-in-optional-chaining": () =>
     bugfixV8SpreadParametersInOptionalChaining,
@@ -98,6 +100,8 @@ const availablePlugins = {
   "transform-duplicate-named-capturing-groups-regex": () =>
     transformDuplicateNamedCapturingGroupsRegex,
   "transform-dynamic-import": () => transformDynamicImport,
+  "transform-explicit-resource-management": () =>
+    transformExplicitResourceManagement,
   "transform-exponentiation-operator": () => transformExponentialOperator,
   "transform-export-namespace-from": () => transformExportNamespaceFrom,
   "transform-for-of": () => transformForOf,
@@ -142,80 +146,3 @@ const availablePlugins = {
 };
 
 export const minVersions = {};
-// TODO(Babel 8): Remove this
-export let legacyBabel7SyntaxPlugins: Set<string>;
-
-if (!process.env.BABEL_8_BREAKING) {
-  /* eslint-disable no-restricted-globals */
-
-  Object.assign(minVersions, {
-    "bugfix/transform-safari-id-destructuring-collision-in-function-expression":
-      "7.16.0",
-    "bugfix/transform-v8-static-class-fields-redefine-readonly": "7.12.0",
-    "syntax-import-attributes": "7.22.0",
-    "transform-class-static-block": "7.12.0",
-    "transform-duplicate-named-capturing-groups-regex": "7.19.0",
-    "transform-private-property-in-object": "7.10.0",
-    "transform-regexp-modifiers": "7.19.0",
-  });
-
-  // This is a factory to create a plugin that enables a parser plugin
-  const syntax =
-    (name: ParserPlugin) => (): typeof transformJsonStrings => () => ({
-      manipulateOptions: (_, p) => p.plugins.push(name),
-    });
-  type ParserPlugin = Parameters<
-    ReturnType<typeof transformJsonStrings>["manipulateOptions"]
-  >[1]["plugins"][number];
-
-  const legacyBabel7SyntaxPluginsLoaders = {
-    "syntax-async-generators": syntax("asyncGenerators"),
-    "syntax-class-properties": syntax("classProperties"),
-    "syntax-class-static-block": syntax("classStaticBlock"),
-    "syntax-dynamic-import": syntax("dynamicImport"),
-    "syntax-export-namespace-from": syntax("exportNamespaceFrom"),
-    "syntax-import-meta": syntax("importMeta"),
-    "syntax-json-strings": syntax("jsonStrings"),
-    "syntax-logical-assignment-operators": syntax("logicalAssignment"),
-    "syntax-nullish-coalescing-operator": syntax("nullishCoalescingOperator"),
-    "syntax-numeric-separator": syntax("numericSeparator"),
-    "syntax-object-rest-spread": syntax("objectRestSpread"),
-    "syntax-optional-catch-binding": syntax("optionalCatchBinding"),
-    "syntax-optional-chaining": syntax("optionalChaining"),
-    "syntax-private-property-in-object": syntax("privateIn"),
-    "syntax-top-level-await": syntax("topLevelAwait"),
-
-    // These are CJS plugins that depend on a package from the monorepo, so it
-    // breaks using ESM. Given that ESM builds are new enough to have this
-    // syntax enabled by default, we can safely skip enabling it.
-
-    "syntax-unicode-sets-regex":
-      USE_ESM || IS_STANDALONE
-        ? () => () => ({})
-        : () => require("@babel/plugin-syntax-unicode-sets-regex"),
-
-    // We need to keep these plugins because they do not simply enable a
-    // feature, but can affect the AST shape (.attributes vs .assertions).
-    // TLA is only used for local development with ESM, since we cannot
-    // require() monorepo files in that case.
-    // eslint-disable-next-line sort-keys
-    "syntax-import-assertions":
-      USE_ESM && !IS_STANDALONE
-        ? await import("@babel/plugin-syntax-import-assertions").then(
-            m => () => m.default,
-          )
-        : otherBabel7Plugins["syntax-import-assertions"],
-    "syntax-import-attributes":
-      USE_ESM && !IS_STANDALONE
-        ? await import("@babel/plugin-syntax-import-attributes").then(
-            m => () => m.default,
-          )
-        : otherBabel7Plugins["syntax-import-attributes"],
-  };
-
-  Object.assign(availablePlugins, legacyBabel7SyntaxPluginsLoaders);
-
-  legacyBabel7SyntaxPlugins = new Set(
-    Object.keys(legacyBabel7SyntaxPluginsLoaders),
-  );
-}

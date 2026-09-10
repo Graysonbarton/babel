@@ -1,7 +1,6 @@
 import { parse } from "@babel/parser";
 
-import _traverse from "../lib/index.js";
-const traverse = _traverse.default || _traverse;
+import traverse from "../lib/index.js";
 
 function getPath(code) {
   const ast = parse(code);
@@ -202,17 +201,13 @@ describe("evaluation", function () {
         .evaluate().value,
     ).toBe("?x=1");
 
-    if (process.env.BABEL_8_BREAKING) {
-      // eslint-disable-next-line jest/no-conditional-expect
-      expect(
-        getPath("btoa('babel');").get("body.0.expression").evaluate().value,
-      ).toBe("YmFiZWw=");
+    expect(
+      getPath("btoa('babel');").get("body.0.expression").evaluate().value,
+    ).toBe("YmFiZWw=");
 
-      // eslint-disable-next-line jest/no-conditional-expect
-      expect(
-        getPath("atob('YmFiZWw=');").get("body.0.expression").evaluate().value,
-      ).toBe("babel");
-    }
+    expect(
+      getPath("atob('YmFiZWw=');").get("body.0.expression").evaluate().value,
+    ).toBe("babel");
   });
 
   it("should not deopt vars in different scope", function () {
@@ -344,6 +339,133 @@ describe("evaluation", function () {
     expect(result.confident).toBe(true);
     expect(result.deopt).toBeNull();
     expect(result.value).toEqual(["foo", "bar"]);
+  });
+
+  it("should not evaluate vars in child scope", function () {
+    const path = getPath(`
+      if (typeof Bar != "undefined") {
+        var doesExist = true;
+      }
+      doesExist;
+    `);
+    const evalResult = path.get("body.1.expression").evaluate();
+    expect(evalResult.confident).toBe(false);
+  });
+
+  it("should not evaluate vars in child scope 2", function () {
+    const path = getPath(`
+      {
+        var doesExist = true;
+        doesExist;
+      }
+    `);
+    const evalResult = path.get("body.0.body.1.expression").evaluate();
+    expect(evalResult.confident).toBe(true);
+  });
+
+  it("should not evaluate vars in child scope 3", function () {
+    const path = getPath(`
+      var doesExist = true;
+      { doesExist }
+    `);
+    const evalResult = path.get("body.1.body.0.expression").evaluate();
+    expect(evalResult.confident).toBe(true);
+  });
+
+  it("should not evaluate vars in child scope 4", function () {
+    const path = getPath(`
+      {
+        var doesExist = true;
+        { doesExist }
+      }
+    `);
+    const evalResult = path.get("body.0.body.1.body.0.expression").evaluate();
+    expect(evalResult.confident).toBe(true);
+  });
+
+  it("should not evaluate vars in child scope 5", function () {
+    const path = getPath(`
+      { { var doesExist = true; } }
+      doesExist
+    `);
+    const evalResult = path.get("body.1.expression").evaluate();
+    expect(evalResult.confident).toBe(true);
+  });
+
+  it("should not evaluate vars in child scope 6", function () {
+    const path = getPath(`
+      for (var i = 0; i < 1; i++) { var doesExist = true; }
+      doesExist
+    `);
+    const evalResult = path.get("body.1.expression").evaluate();
+    expect(evalResult.confident).toBe(false);
+  });
+
+  it("should not evaluate vars in child scope 7", function () {
+    const path = getPath(`
+      do { break; var doesExist = true; } while (false);
+      doesExist
+    `);
+    const evalResult = path.get("body.1.expression").evaluate();
+    expect(evalResult.confident).toBe(false);
+  });
+
+  it("should not evaluate arrays with multiple references", function () {
+    const path = getPath(`
+      const value = [];
+      value.push(Math.random());
+      value;
+    `);
+    const evalResult = path.get("body.2.expression").evaluate();
+    expect(evalResult.confident).toBe(false);
+  });
+
+  it("should not evaluate objects with multiple references", function () {
+    const path = getPath(`
+      const value = {};
+      value.x = Math.random();
+      value;
+    `);
+    const evalResult = path.get("body.2.expression").evaluate();
+    expect(evalResult.confident).toBe(false);
+  });
+
+  it("should evaluate strings with multiple references", function () {
+    const path = getPath(`
+      const value = "hello";
+      ref(value);
+      value;
+    `);
+    const evalResult = path.get("body.2.expression").evaluate();
+    expect(evalResult.confident).toBe(true);
+  });
+
+  it("should not evaluate arrays with new references", function () {
+    const path = getPath(`
+      let value = [];
+      value.push(Math.random());
+      let value2 = value;
+      value2;
+    `);
+    const evalResult = path.get("body.3.expression").evaluate();
+    expect(evalResult.confident).toBe(false);
+  });
+
+  it("should not evaluate Math.method when Math is shadowed by local variable", function () {
+    const path = getPath(`
+      function test(Math) {
+        Math.min(1, 2);
+      }
+    `);
+    const evalResult = path.get("body.0.body.body.0.expression").evaluate();
+    expect(evalResult.confident).toBe(false);
+  });
+
+  it("should evaluate standard global objects when not shadowed", function () {
+    const path = getPath("Math.min(1, 2);");
+    const evalResult = path.get("body.0.expression").evaluate();
+    expect(evalResult.confident).toBe(true);
+    expect(evalResult.value).toBe(1);
   });
 
   addDeoptTest("({a:{b}})", "ObjectExpression", "Identifier");

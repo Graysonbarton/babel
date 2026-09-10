@@ -1,6 +1,6 @@
 {
   "name": "@babel/helper-module-transforms",
-  "version": "7.26.0",
+  "version": "8.0.5",
   "description": "Babel helper functions for implementing ES6 module transformations",
   "author": "The Babel Team (https://babel.dev/team)",
   "homepage": "https://babel.dev/docs/en/next/babel-helper-module-transforms",
@@ -23,28 +23,10 @@
     "@babel/core": "workspace:^"
   },
   "peerDependencies": {
-    "@babel/core": "^7.0.0"
+    "@babel/core": "^8.0.0"
   },
   "engines": {
-    "node": ">=6.9.0"
-  },
-  "conditions": {
-    "BABEL_8_BREAKING": [
-      {
-        "engines": {
-          "node": "^18.20.0 || ^20.17.0 || >=22.8.0"
-        }
-      },
-      {
-        "exports": null
-      }
-    ],
-    "USE_ESM": [
-      null,
-      {
-        "type": "commonjs"
-      }
-    ]
+    "node": "^22.18.0 || >=24.11.0"
   },
   "exports": {
     ".": {

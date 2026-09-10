@@ -8,9 +8,8 @@ import {
   createConfigItem,
   createConfigItemSync,
 } from "../lib/index.js";
-import path from "path";
-import { itNoWin32, itBabel8, commonJS } from "$repo-utils";
-import { supportsESM } from "./helpers/esm.js";
+import path from "node:path";
+import { itNoWin32, commonJS } from "$repo-utils";
 
 const { require, __dirname } = commonJS(import.meta.url);
 
@@ -50,7 +49,7 @@ describe("@babel/core config loading", () => {
   }
 
   describe("createConfigItem", () => {
-    itBabel8("throws on undefined callback", () => {
+    it("throws on undefined callback", () => {
       function myPlugin() {
         return {};
       }
@@ -96,7 +95,7 @@ describe("@babel/core config loading", () => {
   });
 
   describe("loadPartialConfig", () => {
-    itBabel8("throws on undefined callback", () => {
+    it("throws on undefined callback", () => {
       expect(() =>
         loadPartialConfig({
           ...makeOpts(true),
@@ -170,36 +169,32 @@ describe("@babel/core config loading", () => {
 
   describe("loadPartialConfigAsync", () => {
     // https://github.com/babel/babel/issues/15916
-    (supportsESM ? it : it.skip)(
-      "two calls in parallel loading the same ESM config",
-      async () => {
-        const cwd = path.join(
-          __dirname,
-          "fixtures",
-          "config",
-          "config-files",
-          "babel-config-mjs-object",
-        );
+    it("two calls in parallel loading the same ESM config", async () => {
+      const cwd = path.join(
+        __dirname,
+        "fixtures",
+        "config",
+        "config-files",
+        "babel-config-mjs-object",
+      );
 
-        const [config1, config2] = await Promise.all([
-          loadPartialConfigAsync({
-            cwd,
-            filename: path.join(cwd, "./a.js"),
-          }),
-          loadPartialConfigAsync({
-            cwd,
-            filename: path.join(cwd, "./b.js"),
-          }),
-        ]);
+      const [config1, config2] = await Promise.all([
+        loadPartialConfigAsync({
+          cwd,
+          filename: path.join(cwd, "./a.js"),
+        }),
+        loadPartialConfigAsync({
+          cwd,
+          filename: path.join(cwd, "./b.js"),
+        }),
+      ]);
 
-        // eslint-disable-next-line jest/no-standalone-expect
-        expect(config1.options.plugins).toEqual(config2.options.plugins);
-      },
-    );
+      expect(config1.options.plugins).toEqual(config2.options.plugins);
+    });
   });
 
   describe("loadOptions", () => {
-    itBabel8("throws on undefined callback", () => {
+    it("throws on undefined callback", () => {
       const opts = makeOpts();
 
       expect(() => loadOptions(opts)).toThrowErrorMatchingInlineSnapshot(

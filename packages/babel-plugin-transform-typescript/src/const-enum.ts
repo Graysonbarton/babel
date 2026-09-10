@@ -24,7 +24,7 @@ export default function transpileConstEnum(
           spec =>
             t.isExportSpecifier(spec) &&
             spec.exportKind !== "type" &&
-            spec.local.name === name,
+            (spec.local as t.Identifier).name === name,
         ),
     );
   }
@@ -54,7 +54,7 @@ export default function transpileConstEnum(
       );
     } else {
       path.replaceWith(
-        t.variableDeclaration(process.env.BABEL_8_BREAKING ? "const" : "var", [
+        t.variableDeclaration("const", [
           t.variableDeclarator(path.node.id, obj),
         ]),
       );
@@ -90,7 +90,7 @@ export default function transpileConstEnum(
       }
       if (!entriesMap.has(key)) return;
 
-      path.replaceWith(t.cloneNode(entriesMap.get(key)));
+      path.replaceWith(t.cloneNode(entriesMap.get(key)!));
     },
   });
 

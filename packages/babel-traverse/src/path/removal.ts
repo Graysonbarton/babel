@@ -5,11 +5,11 @@ import { getCachedPaths } from "../cache.ts";
 import { _replaceWith } from "./replacement.ts";
 import type NodePath from "./index.ts";
 import { REMOVED, SHOULD_SKIP } from "./index.ts";
-import { getBindingIdentifiers } from "@babel/types";
+import * as t from "@babel/types";
 import { updateSiblingKeys } from "./modification.ts";
 import { resync } from "./context.ts";
 
-export function remove(this: NodePath) {
+export function remove(this: NodePath<t.Node | null>) {
   _assertUnremoved.call(this);
 
   resync.call(this);
@@ -28,20 +28,21 @@ export function remove(this: NodePath) {
   _markRemoved.call(this);
 }
 
-export function _removeFromScope(this: NodePath) {
-  const bindings = getBindingIdentifiers(this.node, false, false, true);
+export function _removeFromScope(this: NodePath<t.Node | null>) {
+  if (!this.node) return;
+  const bindings = t.getBindingIdentifiers(this.node, false, false, true);
   Object.keys(bindings).forEach(name => this.scope.removeBinding(name));
 }
 
-export function _callRemovalHooks(this: NodePath) {
+export function _callRemovalHooks(this: NodePath<t.Node | null>) {
   if (this.parentPath) {
     for (const fn of hooks) {
-      if (fn(this, this.parentPath)) return true;
+      if (fn(this as NodePath<t.Node>, this.parentPath)) return true;
     }
   }
 }
 
-export function _remove(this: NodePath) {
+export function _remove(this: NodePath<t.Node | null>) {
   if (Array.isArray(this.container)) {
     this.container.splice(this.key as number, 1);
     updateSiblingKeys.call(this, this.key as number, -1);
@@ -50,16 +51,17 @@ export function _remove(this: NodePath) {
   }
 }
 
-export function _markRemoved(this: NodePath) {
+export function _markRemoved(this: NodePath<t.Node | null>) {
   // this.shouldSkip = true; this.removed = true;
   this._traverseFlags |= SHOULD_SKIP | REMOVED;
   if (this.parent) {
-    getCachedPaths(this.hub, this.parent).delete(this.node);
+    // @ts-expect-error TODO: better types
+    getCachedPaths(this)?.delete(this.node);
   }
   this.node = null;
 }
 
-export function _assertUnremoved(this: NodePath) {
+export function _assertUnremoved(this: NodePath<t.Node | null>) {
   if (this.removed) {
     throw this.buildCodeFrameError(
       "NodePath has been removed so is read-only.",

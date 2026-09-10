@@ -1,4 +1,3 @@
-import { itBabel8 } from "$repo-utils";
 import * as t from "../lib/index.js";
 
 describe("validate", () => {
@@ -48,10 +47,64 @@ describe("validate", () => {
       }).not.toThrow();
     });
 
-    itBabel8("destructuring, no initializer, in block", () => {
+    it("destructuring, no initializer, in block", () => {
       expect(() => {
         t.blockStatement([t.cloneNode(ast)]);
-      }).toThrow();
+      }).toThrowErrorMatchingInlineSnapshot(
+        `"Property id of VariableDeclarator expected node to be of a type ["Identifier","Placeholder"] but instead got "ObjectPattern""`,
+      );
+    });
+
+    it("const without initializer should pass", () => {
+      expect(() => {
+        const moduleDeclaration = t.tsModuleDeclaration(
+          t.identifier("M"),
+          t.tsModuleBlock([
+            t.blockStatement([
+              t.variableDeclaration("const", [
+                t.variableDeclarator(t.identifier("x")),
+              ]),
+            ]),
+          ]),
+        );
+        moduleDeclaration.declare = true;
+      }).not.toThrow();
+    });
+
+    it("using without initializer should pass", () => {
+      expect(() => {
+        const moduleDeclaration = t.tsModuleDeclaration(
+          t.identifier("M"),
+          t.tsModuleBlock([
+            t.blockStatement([
+              t.variableDeclaration("using", [
+                t.variableDeclarator(t.identifier("x")),
+              ]),
+            ]),
+          ]),
+        );
+        moduleDeclaration.declare = true;
+      }).not.toThrow();
+    });
+
+    it.each(["var", "let", "const"])("%s void pattern should throw", kind => {
+      expect(() =>
+        t.blockStatement([
+          t.variableDeclaration(kind, [
+            t.variableDeclarator(t.voidPattern(), t.identifier("x")),
+          ]),
+        ]),
+      ).toThrow();
+    });
+
+    it.each(["using", "await using"])("%s void pattern should throw", kind => {
+      expect(() =>
+        t.blockStatement([
+          t.variableDeclaration(kind, [
+            t.variableDeclarator(t.voidPattern(), t.identifier("x")),
+          ]),
+        ]),
+      ).not.toThrow();
     });
   });
 });

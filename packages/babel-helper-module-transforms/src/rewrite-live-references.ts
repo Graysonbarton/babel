@@ -36,8 +36,7 @@ function isInType(path: NodePath) {
         return (
           (
             path.parentPath.parent as
-              | t.ExportDefaultDeclaration
-              | t.ExportNamedDeclaration
+              t.ExportDefaultDeclaration | t.ExportNamedDeclaration
           ).exportKind === "type"
         );
       default:
@@ -104,7 +103,7 @@ export default function rewriteLiveReferences(
     imported, // local / import
     exported, // local name => exported name list
     buildImportReference([source, importName, localName], identNode) {
-      const meta = metadata.source.get(source);
+      const meta = metadata.source.get(source)!;
       meta.referenced = true;
 
       if (localName) {
@@ -190,7 +189,7 @@ const rewriteBindingInitVisitor: Visitor<RewriteBindingInitVisitorState> = {
             // not updated the exported value.
             continue;
           } else {
-            init = path.scope.buildUndefinedNode();
+            init = t.buildUndefinedNode();
           }
         }
         // eslint-disable-next-line @typescript-eslint/no-use-before-define
@@ -200,7 +199,7 @@ const rewriteBindingInitVisitor: Visitor<RewriteBindingInitVisitorState> = {
           init,
           path.scope,
         );
-        requeueInParent(decl.get("init"));
+        requeueInParent(decl.get("init") as NodePath);
       } else {
         for (const localName of Object.keys(
           decl.getOuterBindingIdentifiers(),
@@ -234,7 +233,7 @@ const buildBindingExportAssignmentExpression = (
 ) => {
   const exportsObjectName = metadata.exportName;
   for (
-    let currentScope = scope;
+    let currentScope: Scope | undefined = scope;
     currentScope != null;
     currentScope = currentScope.parent
   ) {
@@ -362,7 +361,6 @@ const rewriteReferencesVisitor: Visitor<RewriteReferencesVisitorState> = {
         if (importData) {
           path.replaceWith(
             t.assignmentExpression(
-              // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
               (update.operator[0] + "=") as t.AssignmentExpression["operator"],
               buildImportReference(importData, arg.node),
               buildImportThrow(localName),

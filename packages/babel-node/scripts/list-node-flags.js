@@ -1,4 +1,5 @@
 // NOTE: This file must be runnable on all Node.js version
+/* eslint-disable unicorn/prefer-node-protocol */
 
 const cp = require("child_process");
 const fs = require("fs");
@@ -22,7 +23,7 @@ function push(flag) {
 
 const out = cp.execSync(`${process.execPath} --help`).toString();
 const re = /(?:(-\w), )?(--[\w-]+)\[?(?:=| \[)/g;
-for (let res; (res = re.exec(out)); ) {
+for (let res; (res = re.exec(out));) {
   if (res[1]) push(res[1]);
   push(res[2]);
 }

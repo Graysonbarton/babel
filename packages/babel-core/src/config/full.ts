@@ -31,7 +31,7 @@ import { makePluginAPI, makePresetAPI } from "./helpers/config-api.ts";
 import type { PluginAPI, PresetAPI } from "./helpers/config-api.ts";
 
 import loadPrivatePartialConfig from "./partial.ts";
-import type { ValidatedOptions } from "./validation/options.ts";
+import type { ResolvedOptions } from "./validation/options.ts";
 
 import type * as Context from "./cache-contexts.ts";
 import ConfigError from "../errors/config-error.ts";
@@ -47,17 +47,17 @@ type LoadedDescriptor = {
 export type { InputOptions } from "./validation/options.ts";
 
 export type ResolvedConfig = {
-  options: any;
+  options: ResolvedOptions;
   passes: PluginPasses;
   externalDependencies: ReadonlyDeepArray<string>;
 };
 
 export type { Plugin };
-export type PluginPassList = Array<Plugin>;
-export type PluginPasses = Array<PluginPassList>;
+export type PluginPassList = Plugin[];
+export type PluginPasses = PluginPassList[];
 
 export default gensync(function* loadFullConfig(
-  inputOpts: InputOptions,
+  inputOpts: InputOptions | null | undefined,
 ): Handler<ResolvedConfig | null> {
   const result = yield* loadPrivatePartialConfig(inputOpts);
   if (!result) {
@@ -69,7 +69,7 @@ export default gensync(function* loadFullConfig(
     return null;
   }
 
-  const optionDefaults: ValidatedOptions = {};
+  const optionDefaults = {};
 
   const { plugins, presets } = options;
 
@@ -93,26 +93,25 @@ export default gensync(function* loadFullConfig(
 
   const presetsDescriptors = presets.map(toDescriptor);
   const initialPluginsDescriptors = plugins.map(toDescriptor);
-  const pluginDescriptorsByPass: Array<Array<UnloadedDescriptor<PluginAPI>>> = [
-    [],
-  ];
-  const passes: Array<Array<Plugin>> = [];
+  const pluginDescriptorsByPass: UnloadedDescriptor<PluginAPI>[][] = [[]];
+  const passes: Plugin[][] = [];
 
   const externalDependencies: DeepArray<string> = [];
 
   const ignored = yield* enhanceError(
     context,
     function* recursePresetDescriptors(
-      rawPresets: Array<UnloadedDescriptor<PresetAPI>>,
-      pluginDescriptorsPass: Array<UnloadedDescriptor<PluginAPI>>,
+      rawPresets: UnloadedDescriptor<PresetAPI>[],
+      pluginDescriptorsPass: UnloadedDescriptor<PluginAPI>[],
     ): Handler<true | void> {
-      const presets: Array<{
+      const presets: {
         preset: ConfigChain | null;
-        pass: Array<UnloadedDescriptor<PluginAPI>>;
-      }> = [];
+        pass: UnloadedDescriptor<PluginAPI>[];
+      }[] = [];
 
       for (let i = 0; i < rawPresets.length; i++) {
         const descriptor = rawPresets[i];
+        // @ts-expect-error TODO: disallow false
         if (descriptor.options !== false) {
           try {
             // eslint-disable-next-line no-var
@@ -168,7 +167,7 @@ export default gensync(function* loadFullConfig(
 
   if (ignored) return null;
 
-  const opts: ValidatedOptions = optionDefaults;
+  const opts = optionDefaults as ResolvedOptions;
   mergeOptions(opts, options);
 
   const pluginContext: Context.FullPlugin = {
@@ -185,6 +184,7 @@ export default gensync(function* loadFullConfig(
 
       for (let i = 0; i < descs.length; i++) {
         const descriptor = descs[i];
+        // @ts-expect-error TODO: disallow false
         if (descriptor.options !== false) {
           try {
             // eslint-disable-next-line no-var
@@ -225,7 +225,7 @@ function enhanceError<T extends Function>(context: ConfigContext, fn: T): T {
     } catch (e) {
       // There are a few case where thrown errors will try to annotate themselves multiple times, so
       // to keep things simple we just bail out if re-wrapping the message.
-      if (!/^\[BABEL\]/.test(e.message)) {
+      if (!e.message.startsWith("[BABEL]")) {
         e.message = `[BABEL] ${context.filename ?? "unknown file"}: ${
           e.message
         }`;
@@ -242,7 +242,7 @@ function enhanceError<T extends Function>(context: ConfigContext, fn: T): T {
 const makeDescriptorLoader = <Context, API>(
   apiFactory: (
     cache: CacheConfigurator<Context>,
-    externalDependencies: Array<string>,
+    externalDependencies: string[],
   ) => API,
 ) =>
   makeWeakCache(function* (
@@ -250,11 +250,12 @@ const makeDescriptorLoader = <Context, API>(
     cache: CacheConfigurator<Context>,
   ): Handler<LoadedDescriptor> {
     // Disabled presets should already have been filtered out
+    // @ts-expect-error expected
     if (options === false) throw new Error("Assertion failure");
 
     options = options || {};
 
-    const externalDependencies: Array<string> = [];
+    const externalDependencies: string[] = [];
 
     let item: unknown = value;
     if (typeof value === "function") {
@@ -415,7 +416,7 @@ function* loadPluginDescriptor(
 const needsFilename = (val: unknown) => val && typeof val !== "function";
 
 const validateIfOptionNeedsFilename = (
-  options: ValidatedOptions,
+  options: InputOptions,
   descriptor: UnloadedDescriptor<PresetAPI>,
 ): void => {
   if (
@@ -491,7 +492,7 @@ function* loadPresetDescriptor(
 function chainMaybeAsync<Args extends any[], R extends void | Promise<void>>(
   a: undefined | ((...args: Args) => R),
   b: undefined | ((...args: Args) => R),
-): (...args: Args) => R {
+): ((...args: Args) => R) | undefined {
   if (!a) return b;
   if (!b) return a;
 

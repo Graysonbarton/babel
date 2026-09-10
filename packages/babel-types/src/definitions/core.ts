@@ -23,12 +23,79 @@ import {
   chain,
   assertOneOf,
   validateOptional,
-  type Validator,
   arrayOf,
   arrayOfType,
   validateArrayOfType,
   validateType,
+  combine,
 } from "./utils.ts";
+
+export const classMethodOrPropertyUnionShapeCommon = (
+  allowPrivateName = false,
+) => ({
+  unionShape: {
+    discriminator: "computed",
+    shapes: [
+      {
+        name: "computed",
+        value: [true],
+        properties: {
+          key: {
+            validate: assertNodeType("Expression"),
+          },
+        },
+      },
+      {
+        name: "nonComputed",
+        value: [false],
+        properties: {
+          key: {
+            validate: allowPrivateName
+              ? assertNodeType(
+                  "Identifier",
+                  "StringLiteral",
+                  "NumericLiteral",
+                  "BigIntLiteral",
+                  "PrivateName",
+                )
+              : assertNodeType(
+                  "Identifier",
+                  "StringLiteral",
+                  "NumericLiteral",
+                  "BigIntLiteral",
+                ),
+          },
+        },
+      },
+    ],
+  },
+});
+
+export const memberExpressionUnionShapeCommon = {
+  unionShape: {
+    discriminator: "computed",
+    shapes: [
+      {
+        name: "computed",
+        value: [true],
+        properties: {
+          property: {
+            validate: assertNodeType("Expression"),
+          },
+        },
+      },
+      {
+        name: "nonComputed",
+        value: [false],
+        properties: {
+          property: {
+            validate: assertNodeType("Identifier", "PrivateName"),
+          },
+        },
+      },
+    ],
+  },
+};
 
 const defineType = defineAliasedType("Standardized");
 
@@ -38,10 +105,7 @@ defineType("ArrayExpression", {
       validate: arrayOf(
         assertNodeOrValueType("null", "Expression", "SpreadElement"),
       ),
-      default:
-        !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-          ? []
-          : undefined,
+      default: undefined,
     },
   },
   visitor: ["elements"],
@@ -51,39 +115,31 @@ defineType("ArrayExpression", {
 defineType("AssignmentExpression", {
   fields: {
     operator: {
-      validate:
-        !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-          ? assertValueType("string")
-          : Object.assign(
-              (function () {
-                const identifier = assertOneOf(...ASSIGNMENT_OPERATORS);
-                const pattern = assertOneOf("=");
+      validate: combine(
+        (function () {
+          const identifier = assertOneOf(...ASSIGNMENT_OPERATORS);
+          const pattern = assertOneOf("=");
 
-                return function (node: t.AssignmentExpression, key, val) {
-                  const validator = is("Pattern", node.left)
-                    ? pattern
-                    : identifier;
-                  validator(node, key, val);
-                } as Validator;
-              })(),
-              { type: "string" },
-            ),
+          return function (node, key, val) {
+            const validator = is("Pattern", node.left) ? pattern : identifier;
+            validator(node, key, val);
+          };
+        })(),
+        { oneOf: ASSIGNMENT_OPERATORS },
+      ),
     },
     left: {
-      validate:
-        !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-          ? assertNodeType("LVal", "OptionalMemberExpression")
-          : assertNodeType(
-              "Identifier",
-              "MemberExpression",
-              "OptionalMemberExpression",
-              "ArrayPattern",
-              "ObjectPattern",
-              "TSAsExpression",
-              "TSSatisfiesExpression",
-              "TSTypeAssertion",
-              "TSNonNullExpression",
-            ),
+      validate: assertNodeType(
+        "Identifier",
+        "MemberExpression",
+        "OptionalMemberExpression",
+        "ArrayPattern",
+        "ObjectPattern",
+        "TSAsExpression",
+        "TSSatisfiesExpression",
+        "TSTypeAssertion",
+        "TSNonNullExpression",
+      ),
     },
     right: {
       validate: assertNodeType("Expression"),
@@ -105,12 +161,11 @@ defineType("BinaryExpression", {
         const expression = assertNodeType("Expression");
         const inOp = assertNodeType("Expression", "PrivateName");
 
-        const validator: Validator = Object.assign(
+        const validator = combine(
           function (node: t.BinaryExpression, key, val) {
             const validator = node.operator === "in" ? inOp : expression;
             validator(node, key, val);
-          } as Validator,
-          // todo(ts): can be discriminated union by `operator` property
+          },
           { oneOfNodeTypes: ["Expression", "PrivateName"] },
         );
         return validator;
@@ -119,6 +174,29 @@ defineType("BinaryExpression", {
     right: {
       validate: assertNodeType("Expression"),
     },
+  },
+  unionShape: {
+    discriminator: "operator",
+    shapes: [
+      {
+        name: "in",
+        value: ["in"],
+        properties: {
+          left: {
+            validate: assertNodeType("Expression", "PrivateName"),
+          },
+        },
+      },
+      {
+        name: "notIn",
+        value: BINARY_OPERATORS.filter(op => op !== "in"),
+        properties: {
+          left: {
+            validate: assertNodeType("Expression"),
+          },
+        },
+      },
+    ],
   },
   visitor: ["left", "right"],
   aliases: ["Binary", "Expression"],
@@ -176,14 +254,17 @@ defineType("BreakStatement", {
 });
 
 defineType("CallExpression", {
-  visitor: process.env.BABEL_8_BREAKING
-    ? ["callee", "arguments", "typeArguments"]
-    : ["callee", "arguments", "typeParameters", "typeArguments"],
+  visitor: ["callee", "typeArguments", "arguments"],
   builder: ["callee", "arguments"],
   aliases: ["Expression"],
   fields: {
     callee: {
-      validate: assertNodeType("Expression", "Super", "V8IntrinsicIdentifier"),
+      validate: assertNodeType(
+        "Expression",
+        "Super",
+        "Import",
+        "V8IntrinsicIdentifier",
+      ),
     },
     arguments: validateArrayOfType(
       "Expression",
@@ -191,34 +272,12 @@ defineType("CallExpression", {
       "ArgumentPlaceholder",
     ),
     typeArguments: {
-      validate: process.env.BABEL_8_BREAKING
-        ? assertNodeType(
-            "TypeParameterInstantiation",
-            "TSTypeParameterInstantiation",
-          )
-        : assertNodeType("TypeParameterInstantiation"),
+      validate: assertNodeType(
+        "TypeParameterInstantiation",
+        "TSTypeParameterInstantiation",
+      ),
       optional: true,
     },
-    ...(process.env.BABEL_8_BREAKING
-      ? {}
-      : {
-          optional: {
-            validate: assertValueType("boolean"),
-            optional: true,
-          },
-          typeParameters: {
-            validate: assertNodeType("TSTypeParameterInstantiation"),
-            optional: true,
-          },
-        }),
-    ...(process.env.BABEL_TYPES_8_BREAKING
-      ? {}
-      : {
-          optional: {
-            validate: assertValueType("boolean"),
-            optional: true,
-          },
-        }),
   },
 });
 
@@ -303,12 +362,7 @@ defineType("File", {
       validate: assertNodeType("Program"),
     },
     comments: {
-      validate:
-        !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-          ? Object.assign(() => {}, {
-              each: { oneOfNodeTypes: ["CommentBlock", "CommentLine"] },
-            })
-          : assertEach(assertNodeType("CommentBlock", "CommentLine")),
+      validate: assertEach(assertNodeType("CommentBlock", "CommentLine")),
       optional: true,
     },
     tokens: {
@@ -331,20 +385,17 @@ defineType("ForInStatement", {
   ],
   fields: {
     left: {
-      validate:
-        !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-          ? assertNodeType("VariableDeclaration", "LVal")
-          : assertNodeType(
-              "VariableDeclaration",
-              "Identifier",
-              "MemberExpression",
-              "ArrayPattern",
-              "ObjectPattern",
-              "TSAsExpression",
-              "TSSatisfiesExpression",
-              "TSTypeAssertion",
-              "TSNonNullExpression",
-            ),
+      validate: assertNodeType(
+        "VariableDeclaration",
+        "Identifier",
+        "MemberExpression",
+        "ArrayPattern",
+        "ObjectPattern",
+        "TSAsExpression",
+        "TSSatisfiesExpression",
+        "TSTypeAssertion",
+        "TSNonNullExpression",
+      ),
     },
     right: {
       validate: assertNodeType("Expression"),
@@ -378,7 +429,7 @@ defineType("ForStatement", {
 });
 
 export const functionCommon = () => ({
-  params: validateArrayOfType("Identifier", "Pattern", "RestElement"),
+  params: validateArrayOfType("FunctionParameter"),
   generator: {
     default: false,
   },
@@ -389,25 +440,16 @@ export const functionCommon = () => ({
 
 export const functionTypeAnnotationCommon = () => ({
   returnType: {
-    validate: process.env.BABEL_8_BREAKING
-      ? assertNodeType("TypeAnnotation", "TSTypeAnnotation")
-      : assertNodeType(
-          "TypeAnnotation",
-          "TSTypeAnnotation",
-          // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-          "Noop",
-        ),
+    validate: assertNodeType("TypeAnnotation", "TSTypeAnnotation"),
+
     optional: true,
   },
   typeParameters: {
-    validate: process.env.BABEL_8_BREAKING
-      ? assertNodeType("TypeParameterDeclaration", "TSTypeParameterDeclaration")
-      : assertNodeType(
-          "TypeParameterDeclaration",
-          "TSTypeParameterDeclaration",
-          // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-          "Noop",
-        ),
+    validate: assertNodeType(
+      "TypeParameterDeclaration",
+      "TSTypeParameterDeclaration",
+    ),
+
     optional: true,
   },
 });
@@ -441,7 +483,7 @@ defineType("FunctionDeclaration", {
       validate: assertNodeType("BlockStatement"),
     },
     predicate: {
-      validate: assertNodeType("DeclaredPredicate", "InferredPredicate"),
+      validate: assertNodeType("FlowPredicate"),
       optional: true,
     },
   },
@@ -454,18 +496,15 @@ defineType("FunctionDeclaration", {
     "Pureish",
     "Declaration",
   ],
-  validate:
-    !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-      ? undefined
-      : (function () {
-          const identifier = assertNodeType("Identifier");
+  validate: (function () {
+    const identifier = assertNodeType("Identifier");
 
-          return function (parent, key, node) {
-            if (!is("ExportDefaultDeclaration", parent)) {
-              identifier(node, "id", node.id);
-            }
-          };
-        })(),
+    return function (parent, key, node) {
+      if (!is("ExportDefaultDeclaration", parent)) {
+        identifier(node, "id", node.id);
+      }
+    };
+  })(),
 });
 
 defineType("FunctionExpression", {
@@ -489,7 +528,7 @@ defineType("FunctionExpression", {
       validate: assertNodeType("BlockStatement"),
     },
     predicate: {
-      validate: assertNodeType("DeclaredPredicate", "InferredPredicate"),
+      validate: assertNodeType("FlowPredicate"),
       optional: true,
     },
   },
@@ -497,14 +536,8 @@ defineType("FunctionExpression", {
 
 export const patternLikeCommon = () => ({
   typeAnnotation: {
-    validate: process.env.BABEL_8_BREAKING
-      ? assertNodeType("TypeAnnotation", "TSTypeAnnotation")
-      : assertNodeType(
-          "TypeAnnotation",
-          "TSTypeAnnotation",
-          // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-          "Noop",
-        ),
+    validate: assertNodeType("TypeAnnotation", "TSTypeAnnotation"),
+
     optional: true,
   },
   optional: {
@@ -520,66 +553,64 @@ export const patternLikeCommon = () => ({
 defineType("Identifier", {
   builder: ["name"],
   visitor: ["typeAnnotation", "decorators" /* for legacy param decorators */],
-  aliases: ["Expression", "PatternLike", "LVal", "TSEntityName"],
+  aliases: [
+    "Expression",
+    "FunctionParameter",
+    "PatternLike",
+    "LVal",
+    "TSEntityName",
+  ],
   fields: {
     ...patternLikeCommon(),
     name: {
-      validate:
-        process.env.BABEL_8_BREAKING || process.env.BABEL_TYPES_8_BREAKING
-          ? chain(
-              assertValueType("string"),
-              Object.assign(
-                function (node, key, val) {
-                  if (!isValidIdentifier(val, false)) {
-                    throw new TypeError(
-                      `"${val}" is not a valid identifier name`,
-                    );
-                  }
-                } as Validator,
-                { type: "string" },
-              ),
-            )
-          : assertValueType("string"),
+      validate: chain(
+        assertValueType("string"),
+        combine(
+          function (node, key, val) {
+            if (!isValidIdentifier(val, false)) {
+              throw new TypeError(`"${val}" is not a valid identifier name`);
+            }
+          },
+          { type: "string" },
+        ),
+      ),
     },
   },
-  validate:
-    process.env.BABEL_8_BREAKING || process.env.BABEL_TYPES_8_BREAKING
-      ? function (parent, key, node) {
-          const match = /\.(\w+)$/.exec(key);
-          if (!match) return;
+  validate: function (parent, key, node) {
+    const match = /\.(\w+)$/.exec(key.toString());
+    if (!match) return;
 
-          const [, parentKey] = match;
-          const nonComp = { computed: false };
+    const [, parentKey] = match;
+    const nonComp = { computed: false };
 
-          // We can't check if `parent.property === node`, because nodes are validated
-          // before replacing them in the AST.
-          if (parentKey === "property") {
-            if (is("MemberExpression", parent, nonComp)) return;
-            if (is("OptionalMemberExpression", parent, nonComp)) return;
-          } else if (parentKey === "key") {
-            if (is("Property", parent, nonComp)) return;
-            if (is("Method", parent, nonComp)) return;
-          } else if (parentKey === "exported") {
-            if (is("ExportSpecifier", parent)) return;
-          } else if (parentKey === "imported") {
-            if (is("ImportSpecifier", parent, { imported: node })) return;
-          } else if (parentKey === "meta") {
-            if (is("MetaProperty", parent, { meta: node })) return;
-          }
+    // We can't check if `parent.property === node`, because nodes are validated
+    // before replacing them in the AST.
+    if (parentKey === "property") {
+      if (is("MemberExpression", parent, nonComp)) return;
+      if (is("OptionalMemberExpression", parent, nonComp)) return;
+    } else if (parentKey === "key") {
+      if (is("Property", parent, nonComp)) return;
+      if (is("Method", parent, nonComp)) return;
+    } else if (parentKey === "exported") {
+      if (is("ExportSpecifier", parent)) return;
+    } else if (parentKey === "imported") {
+      if (is("ImportSpecifier", parent, { imported: node })) return;
+    } else if (parentKey === "meta") {
+      if (is("MetaProperty", parent, { meta: node })) return;
+    }
 
-          if (
-            // Ideally we should call isStrictReservedWord if this node is a descendant
-            // of a block in strict mode. Also, we should pass the inModule option so
-            // we can disable "await" in module.
-            (isKeyword(node.name) || isReservedWord(node.name, false)) &&
-            // Even if "this" is a keyword, we are using the Identifier
-            // node to represent it.
-            node.name !== "this"
-          ) {
-            throw new TypeError(`"${node.name}" is not a valid identifier`);
-          }
-        }
-      : undefined,
+    if (
+      // Ideally we should call isStrictReservedWord if this node is a descendant
+      // of a block in strict mode. Also, we should pass the inModule option so
+      // we can disable "await" in module.
+      (isKeyword(node.name) || isReservedWord(node.name, false)) &&
+      // Even if "this" is a keyword, we are using the Identifier
+      // node to represent it.
+      node.name !== "this"
+    ) {
+      throw new TypeError(`"${node.name}" is not a valid identifier`);
+    }
+  },
 });
 
 defineType("IfStatement", {
@@ -629,28 +660,23 @@ defineType("NumericLiteral", {
     value: {
       validate: chain(
         assertValueType("number"),
-        Object.assign(
+        combine(
           function (node, key, val) {
             if (1 / val < 0 || !Number.isFinite(val)) {
               const error = new Error(
                 "NumericLiterals must be non-negative finite numbers. " +
                   `You can use t.valueToNode(${val}) instead.`,
               );
-              if (process.env.BABEL_8_BREAKING) {
-                // TODO(@nicolo-ribaudo) Fix regenerator to not pass negative
-                // numbers here.
-                if (!IS_STANDALONE) {
-                  if (!new Error().stack.includes("regenerator")) {
-                    throw error;
-                  }
+
+              // TODO(@nicolo-ribaudo) Fix regenerator to not pass negative
+              // numbers here.
+              if (!IS_STANDALONE) {
+                if (!new Error().stack!.includes("regenerator")) {
+                  throw error;
                 }
-              } else {
-                // TODO: Enable this warning once regenerator is fixed.
-                // https://github.com/facebook/regenerator/pull/680
-                // console.warn(error);
               }
             }
-          } satisfies Validator,
+          },
           { type: "number" },
         ),
       ),
@@ -682,23 +708,18 @@ defineType("RegExpLiteral", {
       validate: assertValueType("string"),
     },
     flags: {
-      validate:
-        process.env.BABEL_8_BREAKING || process.env.BABEL_TYPES_8_BREAKING
-          ? chain(
-              assertValueType("string"),
-              Object.assign(
-                function (node, key, val) {
-                  const invalid = /[^gimsuy]/.exec(val);
-                  if (invalid) {
-                    throw new TypeError(
-                      `"${invalid[0]}" is not a valid RegExp flag`,
-                    );
-                  }
-                } as Validator,
-                { type: "string" },
-              ),
-            )
-          : assertValueType("string"),
+      validate: chain(
+        assertValueType("string"),
+        combine(
+          function (node, key, val) {
+            const invalid = /[^dgimsuvy]/.exec(val);
+            if (invalid) {
+              throw new TypeError(`"${invalid[0]}" is not a valid RegExp flag`);
+            }
+          },
+          { type: "string" },
+        ),
+      ),
       default: "",
     },
   },
@@ -722,16 +743,10 @@ defineType("LogicalExpression", {
 });
 
 defineType("MemberExpression", {
-  builder: [
-    "object",
-    "property",
-    "computed",
-    ...(!process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-      ? ["optional"]
-      : []),
-  ],
+  builder: ["object", "property", "computed"],
   visitor: ["object", "property"],
-  aliases: ["Expression", "LVal"],
+  aliases: ["Expression", "LVal", "PatternLike"],
+  ...memberExpressionUnionShapeCommon,
   fields: {
     object: {
       validate: assertNodeType("Expression", "Super"),
@@ -741,34 +756,44 @@ defineType("MemberExpression", {
         const normal = assertNodeType("Identifier", "PrivateName");
         const computed = assertNodeType("Expression");
 
-        const validator: Validator = function (
-          node: t.MemberExpression,
-          key,
-          val,
-        ) {
-          const validator: Validator = node.computed ? computed : normal;
-          validator(node, key, val);
-        };
-        // @ts-expect-error todo(ts): can be discriminated union by `computed` property
-        validator.oneOfNodeTypes = ["Expression", "Identifier", "PrivateName"];
+        const validator = combine(
+          function (node: t.MemberExpression, key, val) {
+            const validator = node.computed ? computed : normal;
+            validator(node, key, val);
+          },
+          {
+            oneOfNodeTypes: ["Expression", "Identifier", "PrivateName"],
+          },
+        );
         return validator;
       })(),
     },
     computed: {
       default: false,
     },
-    ...(!process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-      ? {
-          optional: {
-            validate: assertValueType("boolean"),
-            optional: true,
-          },
-        }
-      : {}),
   },
 });
 
-defineType("NewExpression", { inherits: "CallExpression" });
+defineType("NewExpression", {
+  inherits: "CallExpression",
+  fields: {
+    callee: {
+      validate: assertNodeType("Expression", "V8IntrinsicIdentifier"),
+    },
+    arguments: validateArrayOfType(
+      "Expression",
+      "SpreadElement",
+      "ArgumentPlaceholder",
+    ),
+    typeArguments: {
+      validate: assertNodeType(
+        "TypeParameterInstantiation",
+        "TSTypeParameterInstantiation",
+      ),
+      optional: true,
+    },
+  },
+});
 
 defineType("Program", {
   // Note: We explicitly leave 'interpreter' out here because it is
@@ -816,15 +841,14 @@ defineType("ObjectMethod", {
     "returnType",
     "body",
   ],
+  ...classMethodOrPropertyUnionShapeCommon(),
   fields: {
     ...functionCommon(),
     ...functionTypeAnnotationCommon(),
     kind: {
       validate: assertOneOf("method", "get", "set"),
-      ...(!process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-        ? { default: "method" }
-        : {}),
     },
+
     computed: {
       default: false,
     },
@@ -838,18 +862,21 @@ defineType("ObjectMethod", {
         );
         const computed = assertNodeType("Expression");
 
-        const validator: Validator = function (node: t.ObjectMethod, key, val) {
-          const validator = node.computed ? computed : normal;
-          validator(node, key, val);
-        };
-        // @ts-expect-error todo(ts): can be discriminated union by `computed` property
-        validator.oneOfNodeTypes = [
-          "Expression",
-          "Identifier",
-          "StringLiteral",
-          "NumericLiteral",
-          "BigIntLiteral",
-        ];
+        const validator = combine(
+          function (node: t.ObjectMethod, key, val) {
+            const validator = node.computed ? computed : normal;
+            validator(node, key, val);
+          },
+          {
+            oneOfNodeTypes: [
+              "Expression",
+              "Identifier",
+              "StringLiteral",
+              "NumericLiteral",
+              "BigIntLiteral",
+            ],
+          },
+        );
         return validator;
       })(),
     },
@@ -873,65 +900,38 @@ defineType("ObjectMethod", {
 });
 
 defineType("ObjectProperty", {
-  builder: [
-    "key",
-    "value",
-    "computed",
-    "shorthand",
-    ...(!process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-      ? ["decorators"]
-      : []),
-  ],
+  builder: ["key", "value", "computed", "shorthand"],
+  ...classMethodOrPropertyUnionShapeCommon(true),
   fields: {
     computed: {
       default: false,
     },
     key: {
       validate: (function () {
-        const normal = process.env.BABEL_8_BREAKING
-          ? assertNodeType(
-              "Identifier",
-              "StringLiteral",
-              "NumericLiteral",
-              "BigIntLiteral",
-              "PrivateName",
-            )
-          : assertNodeType(
-              "Identifier",
-              "StringLiteral",
-              "NumericLiteral",
-              "BigIntLiteral",
-              // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-              "DecimalLiteral",
-              "PrivateName",
-            );
+        const normal = assertNodeType(
+          "Identifier",
+          "StringLiteral",
+          "NumericLiteral",
+          "BigIntLiteral",
+          "PrivateName",
+        );
+
         const computed = assertNodeType("Expression");
 
-        const validator: Validator = Object.assign(
+        const validator = combine(
           function (node: t.ObjectProperty, key, val) {
             const validator = node.computed ? computed : normal;
             validator(node, key, val);
-          } as Validator,
+          },
           {
-            // todo(ts): can be discriminated union by `computed` property
-            oneOfNodeTypes: process.env.BABEL_8_BREAKING
-              ? [
-                  "Expression",
-                  "Identifier",
-                  "StringLiteral",
-                  "NumericLiteral",
-                  "BigIntLiteral",
-                  "PrivateName",
-                ]
-              : [
-                  "Expression",
-                  "Identifier",
-                  "StringLiteral",
-                  "NumericLiteral",
-                  "BigIntLiteral",
-                  "DecimalLiteral",
-                  "PrivateName",
-                ],
+            oneOfNodeTypes: [
+              "Expression",
+              "Identifier",
+              "StringLiteral",
+              "NumericLiteral",
+              "BigIntLiteral",
+              "PrivateName",
+            ],
           },
         );
         return validator;
@@ -943,30 +943,27 @@ defineType("ObjectProperty", {
       validate: assertNodeType("Expression", "PatternLike"),
     },
     shorthand: {
-      validate:
-        process.env.BABEL_8_BREAKING || process.env.BABEL_TYPES_8_BREAKING
-          ? chain(
-              assertValueType("boolean"),
-              Object.assign(
-                function (node: t.ObjectProperty, key, shorthand) {
-                  if (!shorthand) return;
+      validate: chain(
+        assertValueType("boolean"),
+        combine(
+          function (node: t.ObjectProperty, key, shorthand) {
+            if (!shorthand) return;
 
-                  if (node.computed) {
-                    throw new TypeError(
-                      "Property shorthand of ObjectProperty cannot be true if computed is true",
-                    );
-                  }
+            if (node.computed) {
+              throw new TypeError(
+                "Property shorthand of ObjectProperty cannot be true if computed is true",
+              );
+            }
 
-                  if (!is("Identifier", node.key)) {
-                    throw new TypeError(
-                      "Property shorthand of ObjectProperty cannot be true if key is not an Identifier",
-                    );
-                  }
-                } as Validator,
-                { type: "boolean" },
-              ),
-            )
-          : assertValueType("boolean"),
+            if (!is("Identifier", node.key)) {
+              throw new TypeError(
+                "Property shorthand of ObjectProperty cannot be true if key is not an Identifier",
+              );
+            }
+          },
+          { type: "boolean" },
+        ),
+      ),
       default: false,
     },
     decorators: {
@@ -974,72 +971,59 @@ defineType("ObjectProperty", {
       optional: true,
     },
   },
-  visitor: ["key", "value", "decorators"],
+  visitor: ["decorators", "key", "value"],
   aliases: ["UserWhitespacable", "Property", "ObjectMember"],
-  validate:
-    !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-      ? undefined
-      : (function () {
-          const pattern = assertNodeType(
-            "Identifier",
-            "Pattern",
-            "TSAsExpression",
-            "TSSatisfiesExpression",
-            "TSNonNullExpression",
-            "TSTypeAssertion",
-          );
-          const expression = assertNodeType("Expression");
+  validate: (function () {
+    const pattern = assertNodeType(
+      "Identifier",
+      "Pattern",
+      "TSAsExpression",
+      "TSSatisfiesExpression",
+      "TSNonNullExpression",
+      "TSTypeAssertion",
+    );
+    const expression = assertNodeType("Expression");
 
-          return function (parent, key, node) {
-            const validator = is("ObjectPattern", parent)
-              ? pattern
-              : expression;
-            validator(node, "value", node.value);
-          };
-        })(),
+    return function (parent, key, node) {
+      const validator = is("ObjectPattern", parent) ? pattern : expression;
+      validator(node, "value", node.value);
+    };
+  })(),
 });
 
 defineType("RestElement", {
   visitor: ["argument", "typeAnnotation"],
   builder: ["argument"],
-  aliases: ["LVal", "PatternLike"],
+  aliases: ["FunctionParameter", "PatternLike"],
   deprecatedAlias: "RestProperty",
   fields: {
     ...patternLikeCommon(),
     argument: {
-      validate:
-        !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-          ? assertNodeType("LVal")
-          : assertNodeType(
-              "Identifier",
-              "ArrayPattern",
-              "ObjectPattern",
-              "MemberExpression",
-              "TSAsExpression",
-              "TSSatisfiesExpression",
-              "TSTypeAssertion",
-              "TSNonNullExpression",
-            ),
+      validate: assertNodeType(
+        "Identifier",
+        "ArrayPattern",
+        "ObjectPattern",
+        "MemberExpression",
+        "TSAsExpression",
+        "TSSatisfiesExpression",
+        "TSTypeAssertion",
+        "TSNonNullExpression",
+      ),
     },
   },
-  validate:
-    process.env.BABEL_8_BREAKING || process.env.BABEL_TYPES_8_BREAKING
-      ? function (parent: t.ArrayPattern | t.ObjectPattern, key) {
-          const match = /(\w+)\[(\d+)\]/.exec(key);
-          if (!match) throw new Error("Internal Babel error: malformed key.");
+  validate: function (parent, key) {
+    const match = /(\w+)\[(\d+)\]/.exec(key.toString());
+    if (!match) throw new Error("Internal Babel error: malformed key.");
 
-          const [, listKey, index] = match as unknown as [
-            string,
-            keyof typeof parent,
-            string,
-          ];
-          if ((parent[listKey] as t.Node[]).length > +index + 1) {
-            throw new TypeError(
-              `RestElement must be last element of ${listKey}`,
-            );
-          }
-        }
-      : undefined,
+    const [, listKey, index] = match as unknown as [
+      string,
+      keyof typeof parent,
+      string,
+    ];
+    if ((parent[listKey] as t.Node[]).length > +index + 1) {
+      throw new TypeError(`RestElement must be last element of ${listKey}`);
+    }
+  },
 });
 
 defineType("ReturnStatement", {
@@ -1094,9 +1078,7 @@ defineType("SwitchStatement", {
 });
 
 defineType("ThisExpression", {
-  aliases: process.env.BABEL_8_BREAKING
-    ? ["Expression", "TSEntityName"]
-    : ["Expression"],
+  aliases: ["Expression", "TSEntityName"],
 });
 
 defineType("ThrowStatement", {
@@ -1114,25 +1096,22 @@ defineType("TryStatement", {
   aliases: ["Statement"],
   fields: {
     block: {
-      validate:
-        process.env.BABEL_8_BREAKING || process.env.BABEL_TYPES_8_BREAKING
-          ? chain(
-              assertNodeType("BlockStatement"),
-              Object.assign(
-                function (node: t.TryStatement) {
-                  // This validator isn't put at the top level because we can run it
-                  // even if this node doesn't have a parent.
+      validate: chain(
+        assertNodeType("BlockStatement"),
+        combine(
+          function (node: t.TryStatement) {
+            // This validator isn't put at the top level because we can run it
+            // even if this node doesn't have a parent.
 
-                  if (!node.handler && !node.finalizer) {
-                    throw new TypeError(
-                      "TryStatement expects either a handler or finalizer, or both",
-                    );
-                  }
-                } as Validator,
-                { oneOfNodeTypes: ["BlockStatement"] },
-              ),
-            )
-          : assertNodeType("BlockStatement"),
+            if (!node.handler && !node.finalizer) {
+              throw new TypeError(
+                "TryStatement expects either a handler or finalizer, or both",
+              );
+            }
+          },
+          { oneOfNodeTypes: ["BlockStatement"] },
+        ),
+      ),
     },
     handler: {
       optional: true,
@@ -1169,10 +1148,7 @@ defineType("UpdateExpression", {
       default: false,
     },
     argument: {
-      validate:
-        !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-          ? assertNodeType("Expression")
-          : assertNodeType("Identifier", "MemberExpression"),
+      validate: assertNodeType("Identifier", "MemberExpression"),
     },
     operator: {
       validate: assertOneOf(...UPDATE_OPERATORS),
@@ -1204,36 +1180,55 @@ defineType("VariableDeclaration", {
     },
     declarations: validateArrayOfType("VariableDeclarator"),
   },
-  validate:
-    process.env.BABEL_8_BREAKING || process.env.BABEL_TYPES_8_BREAKING
-      ? (() => {
-          const withoutInit = assertNodeType("Identifier");
+  validate: (() => {
+    const withoutInit = assertNodeType("Identifier", "Placeholder");
+    const constOrLetOrVar = assertNodeType(
+      "Identifier",
+      "ArrayPattern",
+      "ObjectPattern",
+      "Placeholder",
+    );
+    const usingOrAwaitUsing = assertNodeType(
+      "Identifier",
+      "VoidPattern",
+      "Placeholder",
+    );
 
-          return function (parent, key, node: t.VariableDeclaration) {
-            if (is("ForXStatement", parent, { left: node })) {
-              if (node.declarations.length !== 1) {
-                throw new TypeError(
-                  `Exactly one VariableDeclarator is required in the VariableDeclaration of a ${parent.type}`,
-                );
-              }
-            } else {
-              node.declarations.forEach(decl => {
-                if (!decl.init) withoutInit(decl, "id", decl.id);
-              });
-            }
-          };
-        })()
-      : undefined,
+    return function (parent, key, node: t.VariableDeclaration) {
+      const { kind, declarations } = node;
+      const parentIsForX = is("ForXStatement", parent, { left: node });
+      if (parentIsForX) {
+        if (declarations.length !== 1) {
+          throw new TypeError(
+            `Exactly one VariableDeclarator is required in the VariableDeclaration of a ${parent.type}`,
+          );
+        }
+      }
+      for (const decl of declarations) {
+        if (kind === "const" || kind === "let" || kind === "var") {
+          if (!parentIsForX && !decl.init) {
+            withoutInit(decl, "id", decl.id);
+          } else {
+            constOrLetOrVar(decl, "id", decl.id);
+          }
+        } else {
+          usingOrAwaitUsing(decl, "id", decl.id);
+        }
+      }
+    };
+  })(),
 });
 
 defineType("VariableDeclarator", {
   visitor: ["id", "init"],
   fields: {
     id: {
-      validate:
-        !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-          ? assertNodeType("LVal")
-          : assertNodeType("Identifier", "ArrayPattern", "ObjectPattern"),
+      validate: assertNodeType(
+        "Identifier",
+        "ArrayPattern",
+        "ObjectPattern",
+        "VoidPattern",
+      ),
     },
     definite: {
       optional: true,
@@ -1276,7 +1271,7 @@ defineType("WithStatement", {
 defineType("AssignmentPattern", {
   visitor: ["left", "right", "decorators" /* for legacy param decorators */],
   builder: ["left", "right"],
-  aliases: ["Pattern", "PatternLike", "LVal"],
+  aliases: ["FunctionParameter", "Pattern", "PatternLike"],
   fields: {
     ...patternLikeCommon(),
     left: {
@@ -1294,24 +1289,19 @@ defineType("AssignmentPattern", {
     right: {
       validate: assertNodeType("Expression"),
     },
-    // For TypeScript
-    decorators: {
-      validate: arrayOfType("Decorator"),
-      optional: true,
-    },
   },
 });
 
 defineType("ArrayPattern", {
   visitor: ["elements", "typeAnnotation"],
   builder: ["elements"],
-  aliases: ["Pattern", "PatternLike", "LVal"],
+  aliases: ["FunctionParameter", "Pattern", "PatternLike", "LVal"],
   fields: {
     ...patternLikeCommon(),
     elements: {
       validate: chain(
         assertValueType("array"),
-        assertEach(assertNodeOrValueType("null", "PatternLike", "LVal")),
+        assertEach(assertNodeOrValueType("null", "PatternLike")),
       ),
     },
   },
@@ -1330,16 +1320,35 @@ defineType("ArrowFunctionExpression", {
   ],
   fields: {
     ...functionCommon(),
+    generator: {
+      // NOTE: This is not actually supported by arrow function, but since it
+      // comes from functionCommon() also supporting it as a field here in the
+      // type definitions makes usage of t.Function simpler.
+      // Make it optional at least, defaulting to `null`.
+      default: null,
+      optional: true,
+      validate: combine(
+        (node, key, val) => {
+          if (val) {
+            throw new TypeError(
+              "ArrowFunctionExpression cannot be a generator",
+            );
+          }
+        },
+        { type: "boolean" },
+      ),
+    },
     ...functionTypeAnnotationCommon(),
     expression: {
       // https://github.com/babel/babylon/issues/505
+      optional: true,
       validate: assertValueType("boolean"),
     },
     body: {
       validate: assertNodeType("BlockStatement", "Expression"),
     },
     predicate: {
-      validate: assertNodeType("DeclaredPredicate", "InferredPredicate"),
+      validate: assertNodeType("FlowPredicate"),
       optional: true,
     },
   },
@@ -1368,7 +1377,7 @@ defineType("ClassExpression", {
     "id",
     "typeParameters",
     "superClass",
-    process.env.BABEL_8_BREAKING ? "superTypeArguments" : "superTypeParameters",
+    "superTypeArguments",
     "mixins",
     "implements",
     "body",
@@ -1380,17 +1389,11 @@ defineType("ClassExpression", {
       optional: true,
     },
     typeParameters: {
-      validate: process.env.BABEL_8_BREAKING
-        ? assertNodeType(
-            "TypeParameterDeclaration",
-            "TSTypeParameterDeclaration",
-          )
-        : assertNodeType(
-            "TypeParameterDeclaration",
-            "TSTypeParameterDeclaration",
-            // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-            "Noop",
-          ),
+      validate: assertNodeType(
+        "TypeParameterDeclaration",
+        "TSTypeParameterDeclaration",
+      ),
+
       optional: true,
     },
     body: {
@@ -1400,9 +1403,7 @@ defineType("ClassExpression", {
       optional: true,
       validate: assertNodeType("Expression"),
     },
-    [process.env.BABEL_8_BREAKING
-      ? "superTypeArguments"
-      : "superTypeParameters"]: {
+    superTypeArguments: {
       validate: assertNodeType(
         "TypeParameterInstantiation",
         "TSTypeParameterInstantiation",
@@ -1410,13 +1411,7 @@ defineType("ClassExpression", {
       optional: true,
     },
     implements: {
-      validate: arrayOfType(
-        // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-        process.env.BABEL_8_BREAKING
-          ? "TSClassImplements"
-          : "TSExpressionWithTypeArguments",
-        "ClassImplements",
-      ),
+      validate: arrayOfType("TSClassImplements", "ClassImplements"),
       optional: true,
     },
     decorators: {
@@ -1441,17 +1436,11 @@ defineType("ClassDeclaration", {
       optional: true,
     },
     typeParameters: {
-      validate: process.env.BABEL_8_BREAKING
-        ? assertNodeType(
-            "TypeParameterDeclaration",
-            "TSTypeParameterDeclaration",
-          )
-        : assertNodeType(
-            "TypeParameterDeclaration",
-            "TSTypeParameterDeclaration",
-            // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-            "Noop",
-          ),
+      validate: assertNodeType(
+        "TypeParameterDeclaration",
+        "TSTypeParameterDeclaration",
+      ),
+
       optional: true,
     },
     body: {
@@ -1461,9 +1450,7 @@ defineType("ClassDeclaration", {
       optional: true,
       validate: assertNodeType("Expression"),
     },
-    [process.env.BABEL_8_BREAKING
-      ? "superTypeArguments"
-      : "superTypeParameters"]: {
+    superTypeArguments: {
       validate: assertNodeType(
         "TypeParameterInstantiation",
         "TSTypeParameterInstantiation",
@@ -1471,13 +1458,7 @@ defineType("ClassDeclaration", {
       optional: true,
     },
     implements: {
-      validate: arrayOfType(
-        // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-        process.env.BABEL_8_BREAKING
-          ? "TSClassImplements"
-          : "TSExpressionWithTypeArguments",
-        "ClassImplements",
-      ),
+      validate: arrayOfType("TSClassImplements", "ClassImplements"),
       optional: true,
     },
     decorators: {
@@ -1497,17 +1478,14 @@ defineType("ClassDeclaration", {
       optional: true,
     },
   },
-  validate:
-    !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-      ? undefined
-      : (function () {
-          const identifier = assertNodeType("Identifier");
-          return function (parent, key, node) {
-            if (!is("ExportDefaultDeclaration", parent)) {
-              identifier(node, "id", node.id);
-            }
-          };
-        })(),
+  validate: (function () {
+    const identifier = assertNodeType("Identifier");
+    return function (parent, key, node) {
+      if (!is("ExportDefaultDeclaration", parent)) {
+        identifier(node, "id", node.id);
+      }
+    };
+  })(),
 });
 
 export const importAttributes = {
@@ -1515,16 +1493,10 @@ export const importAttributes = {
     optional: true,
     validate: arrayOfType("ImportAttribute"),
   },
-  assertions: {
-    deprecated: true,
-    optional: true,
-    validate: arrayOfType("ImportAttribute"),
-  },
 };
 
 defineType("ExportAllDeclaration", {
-  builder: ["source"],
-  visitor: ["source", "attributes", "assertions"],
+  visitor: ["source", "attributes"],
   aliases: [
     "Statement",
     "Declaration",
@@ -1550,20 +1522,20 @@ defineType("ExportDefaultDeclaration", {
   ],
   fields: {
     declaration: validateType(
-      "TSDeclareFunction",
       "FunctionDeclaration",
       "ClassDeclaration",
       "Expression",
+      "TSDeclareFunction",
+      "TSInterfaceDeclaration",
+      "EnumDeclaration",
     ),
     exportKind: validateOptional(assertOneOf("value")),
   },
 });
 
 defineType("ExportNamedDeclaration", {
-  builder: ["declaration", "specifiers", "source"],
-  visitor: process.env
-    ? ["declaration", "specifiers", "source", "attributes"]
-    : ["declaration", "specifiers", "source", "attributes", "assertions"],
+  builder: ["declaration", "specifiers", "source", "attributes"],
+  visitor: ["declaration", "specifiers", "source", "attributes"],
   aliases: [
     "Statement",
     "Declaration",
@@ -1573,34 +1545,45 @@ defineType("ExportNamedDeclaration", {
   fields: {
     declaration: {
       optional: true,
-      validate:
-        process.env.BABEL_8_BREAKING || process.env.BABEL_TYPES_8_BREAKING
-          ? chain(
-              assertNodeType("Declaration"),
-              Object.assign(
-                function (node: t.ExportNamedDeclaration, key, val) {
-                  // This validator isn't put at the top level because we can run it
-                  // even if this node doesn't have a parent.
+      validate: chain(
+        assertNodeType("Declaration"),
+        combine(
+          function (node: t.ExportNamedDeclaration, key, val) {
+            // This validator isn't put at the top level because we can run it
+            // even if this node doesn't have a parent.
 
-                  if (val && node.specifiers.length) {
-                    throw new TypeError(
-                      "Only declaration or specifiers is allowed on ExportNamedDeclaration",
-                    );
-                  }
+            if (val && node.specifiers.length) {
+              throw new TypeError(
+                "Only declaration or specifiers is allowed on ExportNamedDeclaration",
+              );
+            }
 
-                  // This validator isn't put at the top level because we can run it
-                  // even if this node doesn't have a parent.
+            // This validator isn't put at the top level because we can run it
+            // even if this node doesn't have a parent.
 
-                  if (val && node.source) {
-                    throw new TypeError(
-                      "Cannot export a declaration from a source",
-                    );
-                  }
-                } as Validator,
-                { oneOfNodeTypes: ["Declaration"] },
-              ),
-            )
-          : assertNodeType("Declaration"),
+            if (val && node.source) {
+              throw new TypeError("Cannot export a declaration from a source");
+            }
+          },
+          {
+            oneOfNodeTypes: [
+              "VariableDeclaration",
+              "FunctionDeclaration",
+              "ClassDeclaration",
+              "TSDeclareFunction",
+              "TSEnumDeclaration",
+              "TSImportEqualsDeclaration",
+              "TSInterfaceDeclaration",
+              "TSModuleDeclaration",
+              "TSTypeAliasDeclaration",
+              "EnumDeclaration",
+              "InterfaceDeclaration",
+              "OpaqueType",
+              "TypeAlias",
+            ],
+          },
+        ),
+      ),
     },
     ...importAttributes,
     specifiers: {
@@ -1614,17 +1597,11 @@ defineType("ExportNamedDeclaration", {
           );
           const sourceless = assertNodeType("ExportSpecifier");
 
-          if (
-            !process.env.BABEL_8_BREAKING &&
-            !process.env.BABEL_TYPES_8_BREAKING
-          )
-            return sourced;
-
-          return Object.assign(
+          return combine(
             function (node: t.ExportNamedDeclaration, key, val) {
               const validator = node.source ? sourced : sourceless;
               validator(node, key, val);
-            } as Validator,
+            },
             {
               oneOfNodeTypes: [
                 "ExportSpecifier",
@@ -1649,7 +1626,7 @@ defineType("ExportSpecifier", {
   aliases: ["ModuleSpecifier"],
   fields: {
     local: {
-      validate: assertNodeType("Identifier"),
+      validate: assertNodeType("Identifier", "StringLiteral"),
     },
     exported: {
       validate: assertNodeType("Identifier", "StringLiteral"),
@@ -1676,13 +1653,6 @@ defineType("ForOfStatement", {
   fields: {
     left: {
       validate: (function () {
-        if (
-          !process.env.BABEL_8_BREAKING &&
-          !process.env.BABEL_TYPES_8_BREAKING
-        ) {
-          return assertNodeType("VariableDeclaration", "LVal");
-        }
-
         const declaration = assertNodeType("VariableDeclaration");
         const lval = assertNodeType(
           "Identifier",
@@ -1695,14 +1665,14 @@ defineType("ForOfStatement", {
           "TSNonNullExpression",
         );
 
-        return Object.assign(
+        return combine(
           function (node, key, val) {
             if (is("VariableDeclaration", val)) {
               declaration(node, key, val);
             } else {
               lval(node, key, val);
             }
-          } as Validator,
+          },
           {
             oneOfNodeTypes: [
               "VariableDeclaration",
@@ -1732,10 +1702,8 @@ defineType("ForOfStatement", {
 });
 
 defineType("ImportDeclaration", {
-  builder: ["specifiers", "source"],
-  visitor: process.env.BABEL_8_BREAKING
-    ? ["specifiers", "source", "attributes"]
-    : ["specifiers", "source", "attributes", "assertions"],
+  builder: ["specifiers", "source", "attributes"],
+  visitor: ["specifiers", "source", "attributes"],
   aliases: ["Statement", "Declaration", "ImportOrExportDeclaration"],
   fields: {
     ...importAttributes,
@@ -1804,55 +1772,34 @@ defineType("ImportSpecifier", {
   },
 });
 
-defineType("ImportExpression", {
-  visitor: ["source", "options"],
-  aliases: ["Expression"],
-  fields: {
-    phase: {
-      default: null,
-      validate: assertOneOf("source", "defer"),
-    },
-    source: {
-      validate: assertNodeType("Expression"),
-    },
-    options: {
-      validate: assertNodeType("Expression"),
-      optional: true,
-    },
-  },
-});
-
 defineType("MetaProperty", {
   visitor: ["meta", "property"],
   aliases: ["Expression"],
   fields: {
     meta: {
-      validate:
-        process.env.BABEL_8_BREAKING || process.env.BABEL_TYPES_8_BREAKING
-          ? chain(
-              assertNodeType("Identifier"),
-              Object.assign(
-                function (node: t.MetaProperty, key, val) {
-                  let property;
-                  switch (val.name) {
-                    case "function":
-                      property = "sent";
-                      break;
-                    case "new":
-                      property = "target";
-                      break;
-                    case "import":
-                      property = "meta";
-                      break;
-                  }
-                  if (!is("Identifier", node.property, { name: property })) {
-                    throw new TypeError("Unrecognised MetaProperty");
-                  }
-                } as Validator,
-                { oneOfNodeTypes: ["Identifier"] },
-              ),
-            )
-          : assertNodeType("Identifier"),
+      validate: chain(
+        assertNodeType("Identifier"),
+        combine(
+          function (node: t.MetaProperty, key, val) {
+            let property;
+            switch (val.name) {
+              case "function":
+                property = "sent";
+                break;
+              case "new":
+                property = "target";
+                break;
+              case "import":
+                property = "meta";
+                break;
+            }
+            if (!is("Identifier", node.property, { name: property })) {
+              throw new TypeError("Unrecognised MetaProperty");
+            }
+          },
+          { oneOfNodeTypes: ["Identifier"] },
+        ),
+      ),
     },
     property: {
       validate: assertNodeType("Identifier"),
@@ -1863,6 +1810,7 @@ defineType("MetaProperty", {
 export const classMethodOrPropertyCommon = () => ({
   abstract: {
     validate: assertValueType("boolean"),
+    default: false,
     optional: true,
   },
   accessibility: {
@@ -1873,6 +1821,8 @@ export const classMethodOrPropertyCommon = () => ({
     default: false,
   },
   override: {
+    optional: true,
+    validate: assertValueType("boolean"),
     default: false,
   },
   computed: {
@@ -1891,9 +1841,13 @@ export const classMethodOrPropertyCommon = () => ({
           "NumericLiteral",
           "BigIntLiteral",
         );
-        const computed = assertNodeType("Expression");
+        const computed = assertNodeType("Expression", "PrivateName");
 
-        return function (node: any, key: string, val: any) {
+        return function (
+          node: Extract<t.Node, { computed: boolean }>,
+          key,
+          val,
+        ) {
           const validator = node.computed ? computed : normal;
           validator(node, key, val);
         };
@@ -1904,20 +1858,16 @@ export const classMethodOrPropertyCommon = () => ({
         "NumericLiteral",
         "BigIntLiteral",
         "Expression",
+        "PrivateName",
       ),
     ),
   },
 });
 
-export const classMethodOrDeclareMethodCommon = () => ({
+export const classMethodOrDeclareMethodCommon = (allowDecorators = true) => ({
   ...functionCommon(),
   ...classMethodOrPropertyCommon(),
-  params: validateArrayOfType(
-    "Identifier",
-    "Pattern",
-    "RestElement",
-    "TSParameterProperty",
-  ),
+  params: validateArrayOfType("FunctionParameter", "TSParameterProperty"),
   kind: {
     validate: assertOneOf("get", "set", "method", "constructor"),
     default: "method",
@@ -1929,10 +1879,14 @@ export const classMethodOrDeclareMethodCommon = () => ({
     ),
     optional: true,
   },
-  decorators: {
-    validate: arrayOfType("Decorator"),
-    optional: true,
-  },
+  ...(allowDecorators
+    ? {
+        decorators: {
+          validate: arrayOfType("Decorator"),
+          optional: true,
+        },
+      }
+    : {}),
 });
 
 defineType("ClassMethod", {
@@ -1955,6 +1909,7 @@ defineType("ClassMethod", {
     "returnType",
     "body",
   ],
+  ...classMethodOrPropertyUnionShapeCommon(),
   fields: {
     ...classMethodOrDeclareMethodCommon(),
     ...functionTypeAnnotationCommon(),
@@ -1966,12 +1921,12 @@ defineType("ClassMethod", {
 
 defineType("ObjectPattern", {
   visitor: [
+    "decorators" /* for legacy param decorators */,
     "properties",
     "typeAnnotation",
-    "decorators" /* for legacy param decorators */,
   ],
   builder: ["properties"],
-  aliases: ["Pattern", "PatternLike", "LVal"],
+  aliases: ["FunctionParameter", "Pattern", "PatternLike", "LVal"],
   fields: {
     ...patternLikeCommon(),
     properties: validateArrayOfType("RestElement", "ObjectProperty"),
@@ -1989,19 +1944,10 @@ defineType("SpreadElement", {
   },
 });
 
-defineType(
-  "Super",
-  process.env.BABEL_8_BREAKING
-    ? undefined
-    : {
-        aliases: ["Expression"],
-      },
-);
+defineType("Super");
 
 defineType("TaggedTemplateExpression", {
-  visitor: process.env.BABEL_8_BREAKING
-    ? ["tag", "typeArguments", "quasi"]
-    : ["tag", "typeParameters", "quasi"],
+  visitor: ["tag", "typeArguments", "quasi"],
   builder: ["tag", "quasi"],
   aliases: ["Expression"],
   fields: {
@@ -2011,7 +1957,7 @@ defineType("TaggedTemplateExpression", {
     quasi: {
       validate: assertNodeType("TemplateLiteral"),
     },
-    [process.env.BABEL_8_BREAKING ? "typeArguments" : "typeParameters"]: {
+    typeArguments: {
       validate: assertNodeType(
         "TypeParameterInstantiation",
         "TSTypeParameterInstantiation",
@@ -2099,7 +2045,7 @@ defineType("TemplateLiteral", {
               } quasis but got ${node.quasis.length}`,
             );
           }
-        } as Validator,
+        },
       ),
     },
   },
@@ -2111,22 +2057,19 @@ defineType("YieldExpression", {
   aliases: ["Expression", "Terminatorless"],
   fields: {
     delegate: {
-      validate:
-        process.env.BABEL_8_BREAKING || process.env.BABEL_TYPES_8_BREAKING
-          ? chain(
-              assertValueType("boolean"),
-              Object.assign(
-                function (node: t.YieldExpression, key, val) {
-                  if (val && !node.argument) {
-                    throw new TypeError(
-                      "Property delegate of YieldExpression cannot be true if there is no argument",
-                    );
-                  }
-                } as Validator,
-                { type: "boolean" },
-              ),
-            )
-          : assertValueType("boolean"),
+      validate: chain(
+        assertValueType("boolean"),
+        combine(
+          function (node: t.YieldExpression, key, val) {
+            if (val && !node.argument) {
+              throw new TypeError(
+                "Property delegate of YieldExpression cannot be true if there is no argument",
+              );
+            }
+          },
+          { type: "boolean" },
+        ),
+      ),
       default: false,
     },
     argument: {
@@ -2149,16 +2092,35 @@ defineType("AwaitExpression", {
 });
 
 // --- ES2019 ---
-defineType("Import", {
+defineType("ImportExpression", {
+  visitor: ["source", "options"],
   aliases: ["Expression"],
+  fields: {
+    phase: {
+      default: null,
+      validate: assertOneOf("source", "defer"),
+    },
+    source: {
+      validate: assertNodeType("Expression"),
+    },
+    options: {
+      validate: assertNodeType("Expression"),
+      optional: true,
+    },
+  },
 });
+
+/**
+ * @deprecated Use `ImportExpression` instead.
+ */
+defineType("Import");
 
 // --- ES2020 ---
 defineType("BigIntLiteral", {
   builder: ["value"],
   fields: {
     value: {
-      validate: assertValueType("string"),
+      validate: assertValueType("bigint"),
     },
   },
   aliases: ["Expression", "Pureish", "Literal", "Immutable"],
@@ -2169,7 +2131,7 @@ defineType("ExportNamespaceSpecifier", {
   aliases: ["ModuleSpecifier"],
   fields: {
     exported: {
-      validate: assertNodeType("Identifier"),
+      validate: assertNodeType("Identifier", "StringLiteral"),
     },
   },
 });
@@ -2177,43 +2139,38 @@ defineType("ExportNamespaceSpecifier", {
 defineType("OptionalMemberExpression", {
   builder: ["object", "property", "computed", "optional"],
   visitor: ["object", "property"],
+  // todo: Add OptionalMemberExpression to LVal when optional-chaining-assign reaches stage 4
   aliases: ["Expression"],
+  ...memberExpressionUnionShapeCommon,
   fields: {
     object: {
       validate: assertNodeType("Expression"),
     },
     property: {
       validate: (function () {
-        const normal = assertNodeType("Identifier");
+        const normal = assertNodeType("Identifier", "PrivateName");
         const computed = assertNodeType("Expression");
 
-        const validator: Validator = Object.assign(
+        return combine(
           function (node: t.OptionalMemberExpression, key, val) {
             const validator = node.computed ? computed : normal;
             validator(node, key, val);
-          } as Validator,
-          // todo(ts): can be discriminated union by `computed` property
-          { oneOfNodeTypes: ["Expression", "Identifier"] },
+          },
+          { oneOfNodeTypes: ["Expression", "PrivateName"] },
         );
-        return validator;
       })(),
     },
     computed: {
       default: false,
     },
     optional: {
-      validate:
-        !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-          ? assertValueType("boolean")
-          : chain(assertValueType("boolean"), assertOptionalChainStart()),
+      validate: chain(assertValueType("boolean"), assertOptionalChainStart()),
     },
   },
 });
 
 defineType("OptionalCallExpression", {
-  visitor: process.env.BABEL_8_BREAKING
-    ? ["callee", "arguments", "typeArguments"]
-    : ["callee", "arguments", "typeParameters", "typeArguments"],
+  visitor: ["callee", "typeArguments", "arguments"],
   builder: ["callee", "arguments", "optional"],
   aliases: ["Expression"],
   fields: {
@@ -2226,28 +2183,15 @@ defineType("OptionalCallExpression", {
       "ArgumentPlaceholder",
     ),
     optional: {
-      validate:
-        !process.env.BABEL_8_BREAKING && !process.env.BABEL_TYPES_8_BREAKING
-          ? assertValueType("boolean")
-          : chain(assertValueType("boolean"), assertOptionalChainStart()),
+      validate: chain(assertValueType("boolean"), assertOptionalChainStart()),
     },
     typeArguments: {
-      validate: process.env.BABEL_8_BREAKING
-        ? assertNodeType(
-            "TypeParameterInstantiation",
-            "TSTypeParameterInstantiation",
-          )
-        : assertNodeType("TypeParameterInstantiation"),
+      validate: assertNodeType(
+        "TypeParameterInstantiation",
+        "TSTypeParameterInstantiation",
+      ),
       optional: true,
     },
-    ...(process.env.BABEL_8_BREAKING
-      ? {}
-      : {
-          typeParameters: {
-            validate: assertNodeType("TSTypeParameterInstantiation"),
-            optional: true,
-          },
-        }),
   },
 });
 
@@ -2263,6 +2207,7 @@ defineType("ClassProperty", {
     "static",
   ],
   aliases: ["Property"],
+  ...classMethodOrPropertyUnionShapeCommon(),
   fields: {
     ...classMethodOrPropertyCommon(),
     value: {
@@ -2274,92 +2219,8 @@ defineType("ClassProperty", {
       optional: true,
     },
     typeAnnotation: {
-      validate: process.env.BABEL_8_BREAKING
-        ? assertNodeType("TypeAnnotation", "TSTypeAnnotation")
-        : assertNodeType(
-            "TypeAnnotation",
-            "TSTypeAnnotation",
-            // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-            "Noop",
-          ),
-      optional: true,
-    },
-    decorators: {
-      validate: arrayOfType("Decorator"),
-      optional: true,
-    },
-    readonly: {
-      validate: assertValueType("boolean"),
-      optional: true,
-    },
-    declare: {
-      validate: assertValueType("boolean"),
-      optional: true,
-    },
-    variance: {
-      validate: assertNodeType("Variance"),
-      optional: true,
-    },
-  },
-});
+      validate: assertNodeType("TypeAnnotation", "TSTypeAnnotation"),
 
-defineType("ClassAccessorProperty", {
-  visitor: ["decorators", "key", "typeAnnotation", "value"],
-  builder: [
-    "key",
-    "value",
-    "typeAnnotation",
-    "decorators",
-    "computed",
-    "static",
-  ],
-  aliases: ["Property", "Accessor"],
-  fields: {
-    ...classMethodOrPropertyCommon(),
-    key: {
-      validate: chain(
-        (function () {
-          const normal = assertNodeType(
-            "Identifier",
-            "StringLiteral",
-            "NumericLiteral",
-            "BigIntLiteral",
-            "PrivateName",
-          );
-          const computed = assertNodeType("Expression");
-
-          return function (node: any, key: string, val: any) {
-            const validator = node.computed ? computed : normal;
-            validator(node, key, val);
-          };
-        })(),
-        assertNodeType(
-          "Identifier",
-          "StringLiteral",
-          "NumericLiteral",
-          "BigIntLiteral",
-          "Expression",
-          "PrivateName",
-        ),
-      ),
-    },
-    value: {
-      validate: assertNodeType("Expression"),
-      optional: true,
-    },
-    definite: {
-      validate: assertValueType("boolean"),
-      optional: true,
-    },
-    typeAnnotation: {
-      validate: process.env.BABEL_8_BREAKING
-        ? assertNodeType("TypeAnnotation", "TSTypeAnnotation")
-        : assertNodeType(
-            "TypeAnnotation",
-            "TSTypeAnnotation",
-            // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-            "Noop",
-          ),
       optional: true,
     },
     decorators: {
@@ -2394,14 +2255,8 @@ defineType("ClassPrivateProperty", {
       optional: true,
     },
     typeAnnotation: {
-      validate: process.env.BABEL_8_BREAKING
-        ? assertNodeType("TypeAnnotation", "TSTypeAnnotation")
-        : assertNodeType(
-            "TypeAnnotation",
-            "TSTypeAnnotation",
-            // @ts-ignore(Babel 7 vs Babel 8) Babel 7 AST
-            "Noop",
-          ),
+      validate: assertNodeType("TypeAnnotation", "TSTypeAnnotation"),
+
       optional: true,
     },
     decorators: {
@@ -2413,6 +2268,10 @@ defineType("ClassPrivateProperty", {
       default: false,
     },
     readonly: {
+      validate: assertValueType("boolean"),
+      optional: true,
+    },
+    optional: {
       validate: assertValueType("boolean"),
       optional: true,
     },
@@ -2445,6 +2304,8 @@ defineType("ClassPrivateMethod", {
     "Method",
     "Private",
   ],
+  // `computed` is not included in the `builder`
+  // ...classMethodOrPropertyUnionShapeCommon(),
   fields: {
     ...classMethodOrDeclareMethodCommon(),
     ...functionTypeAnnotationCommon(),
@@ -2477,4 +2338,17 @@ defineType("StaticBlock", {
     body: validateArrayOfType("Statement"),
   },
   aliases: ["Scopable", "BlockParent", "FunctionParent"],
+});
+
+// --- ES2025 ---
+defineType("ImportAttribute", {
+  visitor: ["key", "value"],
+  fields: {
+    key: {
+      validate: assertNodeType("Identifier", "StringLiteral"),
+    },
+    value: {
+      validate: assertNodeType("StringLiteral"),
+    },
+  },
 });

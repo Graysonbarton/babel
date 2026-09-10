@@ -1,53 +1,70 @@
 import { declare } from "@babel/helper-plugin-utils";
-import type { types as t, NodePath } from "@babel/core";
+import type { types as t, NodePath, PluginPass } from "@babel/core";
+// eslint-disable-next-line @babel/development-internal/no-extraneous-dependencies -- only types are used
+import type { ExplodedVisitor } from "@babel/traverse";
 
-export default declare(function ({ types: t, template }) {
+export default declare(function ({ types: t, traverse }) {
   function maybeReplace(
-    source: t.ArgumentPlaceholder | t.SpreadElement | t.Expression,
+    source: t.ArgumentPlaceholder | t.Expression | null | undefined,
     path: NodePath,
+    state: PluginPass,
   ) {
     if (!source) return;
+    // todo: if we want to support `preserveJsx`, we can register a global flag via file.set from transform-react-jsx, and read it here.
+    const preserveJsx = false;
     if (t.isStringLiteral(source)) {
-      if (/[\\/]/.test(source.value)) {
-        source.value = source.value
-          .replace(/(\.[mc]?)ts$/, "$1js")
-          .replace(/\.tsx$/, ".js");
+      if (/^\.\.?\//.test(source.value)) {
+        // @see packages/babel-helpers/src/helpers/tsRewriteRelativeImportExtensions.ts
+        source.value = source.value.replace(
+          /\.(tsx)$|((?:\.d)?)((?:\.[^./]+)?)\.([cm]?)ts$/i,
+          function (m, tsx, d, ext, cm) {
+            return tsx
+              ? preserveJsx
+                ? ".jsx"
+                : ".js"
+              : d && (!ext || !cm)
+                ? m
+                : d + ext + "." + cm.toLowerCase() + "js";
+          },
+        );
       }
       return;
     }
 
     path.replaceWith(
-      template.expression
-        .ast`(${source} + "").replace(/([\\/].*\.[mc]?)tsx?$/, "$1js")`,
+      t.callExpression(
+        state.addHelper("tsRewriteRelativeImportExtensions"),
+        preserveJsx ? [source, t.booleanLiteral(true)] : [source],
+      ),
     );
   }
 
   return {
     name: "preset-typescript/plugin-rewrite-ts-imports",
-    visitor: {
+    visitor: traverse.explode({
       "ImportDeclaration|ExportAllDeclaration|ExportNamedDeclaration"(
         path: NodePath<
           | t.ImportDeclaration
           | t.ExportAllDeclaration
           | t.ExportNamedDeclaration
         >,
+        state,
       ) {
         const node = path.node;
         const kind = t.isImportDeclaration(node)
           ? node.importKind
           : node.exportKind;
         if (kind === "value") {
-          maybeReplace(node.source, path.get("source"));
+          maybeReplace(
+            node.source,
+            path.get("source") as NodePath<t.StringLiteral>,
+            state,
+          );
         }
       },
-      CallExpression(path) {
-        if (t.isImport(path.node.callee)) {
-          maybeReplace(path.node.arguments[0], path.get("arguments.0"));
-        }
+      ImportExpression(path, state) {
+        maybeReplace(path.node.source, path.get("source"), state);
       },
-      ImportExpression(path) {
-        maybeReplace(path.node.source, path.get("source"));
-      },
-    },
+    }) satisfies ExplodedVisitor<PluginPass>,
   };
 });

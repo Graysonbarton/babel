@@ -8,6 +8,7 @@ Using targets:
 Using modules transform: auto
 
 Using plugins:
+  transform-explicit-resource-management { node < 25 }
   transform-duplicate-named-capturing-groups-regex { node < 23 }
   transform-regexp-modifiers { node < 23 }
   transform-unicode-sets-regex { node < 20 }
@@ -18,8 +19,6 @@ Using plugins:
   transform-logical-assignment-operators { node < 15 }
   transform-nullish-coalescing-operator { node < 14 }
   transform-optional-chaining { node < 14 }
-  transform-export-namespace-from { node < 13.2 }
-  transform-modules-commonjs
-  transform-dynamic-import
+  transform-export-namespace-from { node < 13.2.0 }
 
 Using polyfills: No polyfills were added, since the `useBuiltIns` option was not set.

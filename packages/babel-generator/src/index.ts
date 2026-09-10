@@ -17,7 +17,7 @@ import type {
  */
 
 function normalizeOptions(
-  code: string | { [filename: string]: string },
+  code: string | Record<string, string> | undefined,
   opts: GeneratorOptions,
   ast: t.Node,
 ): Format {
@@ -49,7 +49,7 @@ function normalizeOptions(
     }
     if (!Array.isArray((ast as any).tokens)) {
       throw new Error(
-        "`experimental_preserveFormat` requires the AST to have attatched the token of the input code. Make sure to enable the `tokens: true` parser option.",
+        "`experimental_preserveFormat` requires the AST to have attached the token of the input code. Make sure to enable the `tokens: true` parser option.",
       );
     }
   }
@@ -57,6 +57,7 @@ function normalizeOptions(
   const format: Format = {
     auxiliaryCommentBefore: opts.auxiliaryCommentBefore,
     auxiliaryCommentAfter: opts.auxiliaryCommentAfter,
+    // @ts-expect-error define it later
     shouldPrintComment: opts.shouldPrintComment,
     preserveFormat: opts.experimental_preserveFormat,
     retainLines: opts.retainLines,
@@ -72,18 +73,11 @@ function normalizeOptions(
     jsescOption: {
       quotes: "double",
       wrap: true,
-      minimal: process.env.BABEL_8_BREAKING ? true : false,
+      minimal: true,
       ...opts.jsescOption,
     },
     topicToken: opts.topicToken,
-    importAttributesKeyword: opts.importAttributesKeyword,
   };
-
-  if (!process.env.BABEL_8_BREAKING) {
-    format.decoratorsBeforeExport = opts.decoratorsBeforeExport;
-    format.jsescOption.json = opts.jsonCompatibleStrings;
-    format.recordAndTupleSyntaxType = opts.recordAndTupleSyntaxType ?? "hash";
-  }
 
   if (format.minified) {
     format.compact = true;
@@ -209,43 +203,15 @@ export interface GeneratorOptions {
   sourceFileName?: string;
 
   /**
-   * Set to true to run jsesc with "json": true to print "\u00A9" vs. "©";
-   * @deprecated use `jsescOptions: { json: true }` instead
-   */
-  jsonCompatibleStrings?: boolean;
-
-  /**
-   * Set to true to enable support for experimental decorators syntax before
-   * module exports. If not specified, decorators will be printed in the same
-   * position as they were in the input source code.
-   * @deprecated Removed in Babel 8
-   */
-  decoratorsBeforeExport?: boolean;
-
-  /**
    * Options for outputting jsesc representation.
    */
   jsescOption?: jsescOptions;
-
-  /**
-   * For use with the recordAndTuple token.
-   * @deprecated It will be removed in Babel 8.
-   */
-  recordAndTupleSyntaxType?: "bar" | "hash";
 
   /**
    * For use with the Hack-style pipe operator.
    * Changes what token is used for pipe bodies’ topic references.
    */
   topicToken?: "%" | "#" | "@@" | "^^" | "^";
-
-  /**
-   * The import attributes syntax style:
-   * - "with"        : `import { a } from "b" with { type: "json" };`
-   * - "assert"      : `import { a } from "b" assert { type: "json" };`
-   * - "with-legacy" : `import { a } from "b" with type: "json";`
-   */
-  importAttributesKeyword?: "with" | "assert" | "with-legacy";
 }
 
 export interface GeneratorResult {
@@ -255,31 +221,6 @@ export interface GeneratorResult {
   rawMappings: Mapping[] | undefined;
 }
 
-if (!process.env.BABEL_8_BREAKING && !USE_ESM) {
-  /**
-   * We originally exported the Generator class above, but to make it extra clear that it is a private API,
-   * we have moved that to an internal class instance and simplified the interface to the two public methods
-   * that we wish to support.
-   */
-
-  // eslint-disable-next-line no-restricted-globals
-  exports.CodeGenerator = class CodeGenerator {
-    private _ast: t.Node;
-    private _format: Format | undefined;
-    private _map: SourceMap | null;
-    constructor(ast: t.Node, opts: GeneratorOptions = {}, code?: string) {
-      this._ast = ast;
-      this._format = normalizeOptions(code, opts, ast);
-      this._map = opts.sourceMaps ? new SourceMap(opts, code) : null;
-    }
-    generate(): GeneratorResult {
-      const printer = new Printer(this._format, this._map);
-
-      return printer.generate(this._ast);
-    }
-  };
-}
-
 /**
  * Turns an AST into code, maintaining sourcemaps, user preferences, and valid output.
  * @param ast - the abstract syntax tree from which to generate output code.
@@ -287,10 +228,10 @@ if (!process.env.BABEL_8_BREAKING && !USE_ESM) {
  * @param code - the original source code, used for source maps.
  * @returns - an object containing the output code and source map.
  */
-export default function generate(
+export function generate(
   ast: t.Node,
   opts: GeneratorOptions = {},
-  code?: string | { [filename: string]: string },
+  code?: string | Record<string, string>,
 ): GeneratorResult {
   const format = normalizeOptions(code, opts, ast);
   const map = opts.sourceMaps ? new SourceMap(opts, code) : null;
@@ -304,3 +245,5 @@ export default function generate(
 
   return printer.generate(ast);
 }
+
+export default generate;

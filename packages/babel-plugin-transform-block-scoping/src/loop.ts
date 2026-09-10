@@ -104,64 +104,6 @@ interface CompletionsAndVarsState {
   loopNode: t.Loop;
 }
 
-const collectCompletionsAndVarsVisitor: Visitor<CompletionsAndVarsState> = {
-  Function(path) {
-    path.skip();
-  },
-  LabeledStatement: {
-    enter({ node }, state) {
-      state.labelsStack.push(node.label.name);
-    },
-    exit({ node }, state) {
-      const popped = state.labelsStack.pop();
-      if (popped !== node.label.name) {
-        throw new Error("Assertion failure. Please report this bug to Babel.");
-      }
-    },
-  },
-  Loop: {
-    enter(_, state) {
-      state.labellessContinueTargets++;
-      state.labellessBreakTargets++;
-    },
-    exit(_, state) {
-      state.labellessContinueTargets--;
-      state.labellessBreakTargets--;
-    },
-  },
-  SwitchStatement: {
-    enter(_, state) {
-      state.labellessBreakTargets++;
-    },
-    exit(_, state) {
-      state.labellessBreakTargets--;
-    },
-  },
-  "BreakStatement|ContinueStatement"(
-    path: NodePath<t.BreakStatement | t.ContinueStatement>,
-    state,
-  ) {
-    const { label } = path.node;
-    if (label) {
-      if (state.labelsStack.includes(label.name)) return;
-    } else if (
-      path.isBreakStatement()
-        ? state.labellessBreakTargets > 0
-        : state.labellessContinueTargets > 0
-    ) {
-      return;
-    }
-    state.breaksContinues.push(path);
-  },
-  ReturnStatement(path, state) {
-    state.returns.push(path);
-  },
-  VariableDeclaration(path, state) {
-    if (path.parent === state.loopNode && isVarInLoopHead(path)) return;
-    if (path.node.kind === "var") state.vars.push(path);
-  },
-};
-
 export function wrapLoopBody(
   loopPath: NodePath<t.Loop>,
   captured: string[],
@@ -177,7 +119,68 @@ export function wrapLoopBody(
     vars: [],
     loopNode,
   };
-  loopPath.traverse(collectCompletionsAndVarsVisitor, state);
+  loopPath.traverse(
+    {
+      Function(path) {
+        path.skip();
+      },
+      LabeledStatement: {
+        enter({ node }, state) {
+          state.labelsStack.push(node.label.name);
+        },
+        exit({ node }, state) {
+          const popped = state.labelsStack.pop();
+          if (popped !== node.label.name) {
+            throw new Error(
+              "Assertion failure. Please report this bug to Babel.",
+            );
+          }
+        },
+      },
+      Loop: {
+        enter(_, state) {
+          state.labellessContinueTargets++;
+          state.labellessBreakTargets++;
+        },
+        exit(_, state) {
+          state.labellessContinueTargets--;
+          state.labellessBreakTargets--;
+        },
+      },
+      SwitchStatement: {
+        enter(_, state) {
+          state.labellessBreakTargets++;
+        },
+        exit(_, state) {
+          state.labellessBreakTargets--;
+        },
+      },
+      "BreakStatement|ContinueStatement"(
+        path: NodePath<t.BreakStatement | t.ContinueStatement>,
+        state,
+      ) {
+        const { label } = path.node;
+        if (label) {
+          if (state.labelsStack.includes(label.name)) return;
+        } else if (
+          path.isBreakStatement()
+            ? state.labellessBreakTargets > 0
+            : state.labellessContinueTargets > 0
+        ) {
+          return;
+        }
+        state.breaksContinues.push(path);
+      },
+      ReturnStatement(path, state) {
+        state.returns.push(path);
+      },
+      VariableDeclaration(path, state) {
+        if (path.parent === state.loopNode && isVarInLoopHead(path)) return;
+        if (path.node.kind === "var") state.vars.push(path);
+      },
+    },
+    state,
+  );
 
   const callArgs = [];
   const closureParams = [];
@@ -199,16 +202,14 @@ export function wrapLoopBody(
   }
 
   const id = loopPath.scope.generateUid("loop");
-  const fn = t.functionExpression(
-    null,
-    closureParams,
-    t.toBlock(loopNode.body),
-  );
+  const fn = t.functionExpression(null, closureParams, t.blockStatement([]));
   let call: t.Expression = t.callExpression(t.identifier(id), callArgs);
 
-  const fnParent = loopPath.findParent(p => p.isFunction());
+  const fnParent = loopPath.findParent(p => p.isFunctionParent());
   if (fnParent) {
-    const { async, generator } = fnParent.node as t.Function;
+    // @ts-expect-error: async and generator are not on t.FunctionParent, here we provide default values for static blocks.
+    const { async = false, generator = false } =
+      fnParent.node as t.FunctionParent;
     fn.async = async;
     fn.generator = generator;
     if (generator) call = t.yieldExpression(call, true);
@@ -219,7 +220,6 @@ export function wrapLoopBody(
     updater.length > 0
       ? t.expressionStatement(t.sequenceExpression(updater))
       : null;
-  if (updaterNode) fn.body.body.push(updaterNode);
 
   // NOTE: Calling .insertBefore on the loop path might cause the
   // loop to be moved in the AST. For example, in
@@ -231,17 +231,25 @@ export function wrapLoopBody(
   // TODO: Consider using a function declaration
   const [varPath] = loopPath.insertBefore(
     t.variableDeclaration("var", [t.variableDeclarator(t.identifier(id), fn)]),
-  ) as [NodePath<t.VariableDeclaration>];
+  );
 
   const bodyStmts: t.Statement[] = [];
 
   const varNames: string[] = [];
   for (const varPath of state.vars) {
-    const assign = [];
+    const assign: t.Expression[] = [];
     for (const decl of varPath.node.declarations) {
       varNames.push(...Object.keys(t.getBindingIdentifiers(decl.id)));
       if (decl.init) {
-        assign.push(t.assignmentExpression("=", decl.id, decl.init));
+        assign.push(
+          t.assignmentExpression(
+            "=",
+            // using/await using should be handled by the explicit-resource-management plugin
+            // so decl.id must not be a void pattern
+            decl.id as Exclude<t.VariableDeclarator["id"], t.VoidPattern>,
+            decl.init,
+          ),
+        );
       } else if (t.isForXStatement(varPath.parent, { left: varPath.node })) {
         assign.push(decl.id as t.Identifier);
       }
@@ -342,7 +350,7 @@ export function wrapLoopBody(
 
     if (returnNum) {
       for (const path of state.returns) {
-        const arg = path.node.argument || path.scope.buildUndefinedNode();
+        const arg = path.node.argument || t.buildUndefinedNode();
         path.replaceWith(
           template.statement.ast`
           return { v: ${arg} };
@@ -360,7 +368,13 @@ export function wrapLoopBody(
     }
   }
 
+  // Assign loop closure body after the original loop body was manipulated by
+  // the completion record handling above. Doing so also avoids duplicate AST
+  // nodes during the transform
+  const loopBlockBody = t.toBlock(loopNode.body);
   loopNode.body = t.blockStatement(bodyStmts);
+  fn.body = loopBlockBody;
+  if (updaterNode) loopBlockBody.body.push(updaterNode);
 
   return varPath;
 }
@@ -369,6 +383,10 @@ export function isVarInLoopHead(path: NodePath<t.VariableDeclaration>) {
   if (t.isForStatement(path.parent)) return path.key === "init";
   if (t.isForXStatement(path.parent)) return path.key === "left";
   return false;
+}
+
+export function isVarInForStatementInit(path: NodePath<t.VariableDeclaration>) {
+  return path.parentPath.isForStatement() && path.key === "init";
 }
 
 function filterMap<T, U extends object>(list: T[], fn: (item: T) => U | null) {

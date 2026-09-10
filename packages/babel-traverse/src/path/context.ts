@@ -1,30 +1,13 @@
 // This file contains methods responsible for maintaining a TraversalContext.
 
-import { traverseNode } from "../traverse-node.ts";
 import { SHOULD_SKIP, SHOULD_STOP } from "./index.ts";
 import { _markRemoved } from "./removal.ts";
 import type TraversalContext from "../context.ts";
-import type { VisitPhase } from "../types.ts";
 import type NodePath from "./index.ts";
+import type { ExplodedVisitor, TraverseOptions } from "../types.ts";
 import * as t from "@babel/types";
 
-export function call(this: NodePath, key: VisitPhase): boolean {
-  const opts = this.opts;
-
-  this.debug(key);
-
-  if (this.node) {
-    if (_call.call(this, opts[key])) return true;
-  }
-
-  if (this.node) {
-    return _call.call(this, opts[this.node.type]?.[key]);
-  }
-
-  return false;
-}
-
-export function _call(this: NodePath, fns?: Array<Function>): boolean {
+export function _call(this: NodePath, fns?: Function[]): boolean {
   if (!fns) return false;
 
   for (const fn of fns) {
@@ -57,64 +40,7 @@ export function _call(this: NodePath, fns?: Array<Function>): boolean {
 }
 
 export function isDenylisted(this: NodePath): boolean {
-  // @ts-expect-error TODO(Babel 8): Remove blacklist
-  const denylist = this.opts.denylist ?? this.opts.blacklist;
-  return denylist?.includes(this.node.type);
-}
-
-if (!process.env.BABEL_8_BREAKING && !USE_ESM) {
-  // eslint-disable-next-line no-restricted-globals
-  exports.isBlacklisted = isDenylisted;
-}
-
-function restoreContext(path: NodePath, context: TraversalContext) {
-  if (path.context !== context) {
-    path.context = context;
-    path.state = context.state;
-    path.opts = context.opts;
-  }
-}
-
-export function visit(this: NodePath): boolean {
-  if (!this.node) {
-    return false;
-  }
-
-  if (this.isDenylisted()) {
-    return false;
-  }
-
-  if (this.opts.shouldSkip?.(this)) {
-    return false;
-  }
-
-  const currentContext = this.context;
-  // Note: We need to check "this.shouldSkip" first because
-  // another visitor can set it to true. Usually .shouldSkip is false
-  // before calling the enter visitor, but it can be true in case of
-  // a requeued node (e.g. by .replaceWith()) that is then marked
-  // with .skip().
-  if (this.shouldSkip || call.call(this, "enter")) {
-    this.debug("Skip...");
-    return this.shouldStop;
-  }
-  restoreContext(this, currentContext);
-
-  this.debug("Recursing into...");
-  this.shouldStop = traverseNode(
-    this.node,
-    this.opts,
-    this.scope,
-    this.state,
-    this,
-    this.skipKeys,
-  );
-
-  restoreContext(this, currentContext);
-
-  call.call(this, "exit");
-
-  return this.shouldStop;
+  return !!this.opts.denylist?.includes(this.node.type);
 }
 
 export function skip(this: NodePath) {
@@ -133,7 +59,31 @@ export function stop(this: NodePath) {
   this._traverseFlags |= SHOULD_SKIP | SHOULD_STOP;
 }
 
-export function setScope(this: NodePath) {
+export function _forceSetScope(this: NodePath) {
+  let path = this.parentPath;
+
+  if (
+    // Skip method scope if is computed method key or decorator expression
+    ((this.key === "key" || this.listKey === "decorators") &&
+      path.isMethod()) ||
+    // Skip switch scope if for discriminant (`x` in `switch (x) {}`).
+    (this.key === "discriminant" && path.isSwitchStatement())
+  ) {
+    path = path.parentPath;
+  }
+
+  let target;
+  while (path && !target) {
+    target = path.scope;
+    path = path.parentPath;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  this.scope = this.getScope(target!);
+  this.scope?.init();
+}
+
+export function setScope(this: NodePath<t.Node | null>) {
   if (this.opts?.noScope) return;
 
   let path = this.parentPath;
@@ -156,12 +106,14 @@ export function setScope(this: NodePath) {
     path = path.parentPath;
   }
 
-  this.scope = this.getScope(target);
+  // @ts-expect-error getScope does not accept NodePath<null> as this
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  this.scope = this.getScope(target!);
   this.scope?.init();
 }
 
 export function setContext<S = unknown>(
-  this: NodePath,
+  this: NodePath<t.Node | null>,
   context?: TraversalContext<S>,
 ) {
   if (this.skipKeys != null) {
@@ -171,10 +123,10 @@ export function setContext<S = unknown>(
   this._traverseFlags = 0;
 
   if (context) {
-    this.context = context;
+    this.context = context as TraversalContext;
     this.state = context.state;
     // Discard the S type parameter from context.opts
-    this.opts = context.opts as typeof this.opts;
+    this.opts = context.opts as TraverseOptions & ExplodedVisitor<unknown>;
   }
 
   setScope.call(this);
@@ -188,7 +140,7 @@ export function setContext<S = unknown>(
  * for the new values.
  */
 
-export function resync(this: NodePath) {
+export function resync(this: NodePath<t.Node | null>) {
   if (this.removed) return;
 
   _resyncParent.call(this);
@@ -197,13 +149,13 @@ export function resync(this: NodePath) {
   //this._resyncRemoved();
 }
 
-export function _resyncParent(this: NodePath) {
+export function _resyncParent(this: NodePath<t.Node | null>) {
   if (this.parentPath) {
     this.parent = this.parentPath.node;
   }
 }
 
-export function _resyncKey(this: NodePath) {
+export function _resyncKey(this: NodePath<t.Node | null>) {
   if (!this.container) return;
 
   if (
@@ -238,7 +190,7 @@ export function _resyncKey(this: NodePath) {
   this.key = null;
 }
 
-export function _resyncList(this: NodePath) {
+export function _resyncList(this: NodePath<t.Node | null>) {
   if (!this.parent || !this.inList) return;
 
   const newContainer =
@@ -250,7 +202,7 @@ export function _resyncList(this: NodePath) {
   this.container = newContainer || null;
 }
 
-export function _resyncRemoved(this: NodePath) {
+export function _resyncRemoved(this: NodePath<t.Node | null>) {
   if (
     this.key == null ||
     !this.container ||
@@ -261,7 +213,7 @@ export function _resyncRemoved(this: NodePath) {
   }
 }
 
-export function popContext(this: NodePath) {
+export function popContext(this: NodePath<t.Node | null>) {
   this.contexts.pop();
   if (this.contexts.length > 0) {
     this.setContext(this.contexts[this.contexts.length - 1]);
@@ -270,16 +222,19 @@ export function popContext(this: NodePath) {
   }
 }
 
-export function pushContext(this: NodePath, context: TraversalContext) {
+export function pushContext(
+  this: NodePath<t.Node | null>,
+  context: TraversalContext,
+) {
   this.contexts.push(context);
   this.setContext(context);
 }
 
 export function setup(
   this: NodePath,
-  parentPath: NodePath | undefined,
+  parentPath: NodePath | undefined | null,
   container: t.Node | t.Node[],
-  listKey: string,
+  listKey: string | undefined | null,
   key: string | number,
 ) {
   this.listKey = listKey;
@@ -289,22 +244,21 @@ export function setup(
   setKey.call(this, key);
 }
 
-export function setKey(this: NodePath, key: string | number) {
+export function setKey(this: NodePath<t.Node | null>, key: string | number) {
   this.key = key;
   this.node =
     // @ts-expect-error this.key must present in this.container
     this.container[this.key];
-  this.type = this.node?.type;
+  this.type = this.node?.type ?? null;
 }
 
-export function requeue(this: NodePath, pathToQueue = this) {
+export function requeue(this: NodePath<t.Node | null>, pathToQueue = this) {
   if (pathToQueue.removed) return;
 
   // If a path is skipped, and then replaced with a
   // new one, the new one shouldn't probably be skipped.
-  if (process.env.BABEL_8_BREAKING) {
-    pathToQueue.shouldSkip = false;
-  }
+
+  pathToQueue.shouldSkip = false;
 
   // TODO(loganfsmyth): This should be switched back to queue in parent contexts
   // automatically once #2892 and #4135 have been resolved. See #4140.
@@ -330,7 +284,7 @@ export function requeueComputedKeyAndDecorators(
   }
 }
 
-export function _getQueueContexts(this: NodePath) {
+export function _getQueueContexts(this: NodePath<t.Node | null>) {
   let path = this;
   let contexts = this.contexts;
   while (!contexts.length) {

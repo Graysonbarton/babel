@@ -1,8 +1,9 @@
 import { declare } from "@babel/helper-plugin-utils";
+import syntaxPartialApplication from "@babel/plugin-syntax-partial-application";
 import { types as t, type Scope } from "@babel/core";
 
 export default declare(api => {
-  api.assertVersion(REQUIRED_VERSION(7));
+  api.assertVersion(REQUIRED_VERSION("^7.0.0-0 || ^8.0.0"));
 
   /**
    * a function to figure out if a call expression has
@@ -68,9 +69,10 @@ export default declare(api => {
 
   return {
     name: "proposal-partial-application",
-    manipulateOptions: (_, parser) => parser.plugins.push("partialApplication"),
+    inherits: syntaxPartialApplication,
 
     visitor: {
+      // Todo: support partial application in NewExpression/OptionalCallExpression.
       CallExpression(path) {
         if (!hasArgumentPlaceholder(path.node)) {
           return;
@@ -84,24 +86,48 @@ export default declare(api => {
         const [placeholdersParams, args] = replacePlaceholders(node, scope);
 
         scope.push({ id: functionLVal });
+        const callee = node.callee;
 
-        if (node.callee.type === "MemberExpression") {
-          const { object: receiver, property } = node.callee;
-          const receiverLVal =
-            path.scope.generateUidIdentifierBasedOnNode(receiver);
-          scope.push({ id: receiverLVal });
-
+        if (t.isMemberExpression(callee)) {
+          const { property, object: calleeObject } = callee;
+          let object = calleeObject,
+            receiverLVal;
+          if (t.isSuper(calleeObject)) {
+            receiverLVal = t.thisExpression();
+          } else if (scope.isStatic(calleeObject)) {
+            receiverLVal = t.cloneNode(calleeObject);
+          } else {
+            receiverLVal =
+              path.scope.generateUidIdentifierBasedOnNode(calleeObject);
+            scope.push({ id: t.cloneNode(receiverLVal) });
+            sequenceParts.push(
+              t.assignmentExpression(
+                "=",
+                t.cloneNode(receiverLVal),
+                t.cloneNode(calleeObject),
+              ),
+            );
+            object = t.cloneNode(receiverLVal);
+          }
+          if (t.isThisExpression(receiverLVal)) {
+            // Memoize `this` as the function wrapper may overwrite the `this` binding.
+            const thisExpressionId =
+              path.scope.generateUidIdentifierBasedOnNode(receiverLVal);
+            scope.push({ id: t.cloneNode(thisExpressionId) });
+            sequenceParts.push(
+              t.assignmentExpression(
+                "=",
+                t.cloneNode(thisExpressionId),
+                receiverLVal,
+              ),
+            );
+            receiverLVal = thisExpressionId;
+          }
           sequenceParts.push(
             t.assignmentExpression(
               "=",
-              t.cloneNode(receiverLVal),
-              // @ts-ignore(Babel 7 vs Babel 8) Fixme: support `super.foo(?)`
-              receiver,
-            ),
-            t.assignmentExpression(
-              "=",
               t.cloneNode(functionLVal),
-              t.memberExpression(t.cloneNode(receiverLVal), property),
+              t.memberExpression(object, property),
             ),
             ...argsInitializers,
             t.functionExpression(
@@ -117,7 +143,7 @@ export default declare(api => {
                         t.cloneNode(functionLVal),
                         t.identifier("call"),
                       ),
-                      [t.cloneNode(receiverLVal), ...args],
+                      [receiverLVal, ...args],
                     ),
                   ),
                 ],

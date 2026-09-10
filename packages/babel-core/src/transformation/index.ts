@@ -1,4 +1,4 @@
-import traverse from "@babel/traverse";
+import traverse, { type ExplodedVisitor, type Visitor } from "@babel/traverse";
 import type * as t from "@babel/types";
 import type { GeneratorResult } from "@babel/generator";
 
@@ -16,6 +16,7 @@ import type File from "./file/file.ts";
 
 import { flattenToSet } from "../config/helpers/deep-array.ts";
 import { isAsync, maybeAsync } from "../gensync-utils/async.ts";
+import type { SourceTypeOption } from "../config/validation/options.ts";
 
 export type FileResultCallback = {
   (err: Error, file: null): void;
@@ -23,12 +24,12 @@ export type FileResultCallback = {
 };
 
 export type FileResult = {
-  metadata: { [key: string]: any };
-  options: { [key: string]: any };
+  metadata: Record<string, any>;
+  options: Record<string, any>;
   ast: t.File | null;
   code: string | null;
-  map: GeneratorResult["map"] | null;
-  sourceType: "script" | "module";
+  map: GeneratorResult["map"];
+  sourceType: Exclude<SourceTypeOption, "unambiguous">;
   externalDependencies: Set<string>;
 };
 
@@ -85,14 +86,15 @@ function* transformFile(file: File, pluginPasses: PluginPasses): Handler<void> {
   for (const pluginPairs of pluginPasses) {
     const passPairs: [Plugin, PluginPass][] = [];
     const passes = [];
-    const visitors = [];
+    const visitors: Visitor<PluginPass<object>>[] = [];
 
     for (const plugin of pluginPairs.concat([loadBlockHoistPlugin()])) {
       const pass = new PluginPass(file, plugin.key, plugin.options, async);
 
       passPairs.push([plugin, pass]);
       passes.push(pass);
-      visitors.push(plugin.visitor);
+      // FIXME: plugin.visitor may be undefined
+      visitors.push(plugin.visitor!);
     }
 
     for (const [plugin, pass] of passPairs) {
@@ -108,16 +110,14 @@ function* transformFile(file: File, pluginPasses: PluginPasses): Handler<void> {
     }
 
     // merge all plugin visitors into a single visitor
-    const visitor = traverse.visitors.merge(
-      visitors,
-      passes,
-      file.opts.wrapPluginVisitorMethod,
-    );
-    if (process.env.BABEL_8_BREAKING) {
-      traverse(file.ast.program, visitor, file.scope, null, file.path, true);
-    } else {
-      traverse(file.ast, visitor, file.scope);
-    }
+    const visitor: ExplodedVisitor<PluginPass<object>> =
+      traverse.visitors.merge(
+        visitors,
+        passes,
+        file.opts.wrapPluginVisitorMethod,
+      );
+
+    traverse(file.ast.program, visitor, file.scope, null, file.path, true);
 
     for (const [plugin, pass] of passPairs) {
       if (plugin.post) {

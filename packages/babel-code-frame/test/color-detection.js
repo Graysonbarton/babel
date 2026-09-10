@@ -1,20 +1,23 @@
-import stripAnsi from "strip-ansi";
-import colors from "picocolors";
+import { stripVTControlCharacters, styleText } from "node:util";
 
-import _codeFrame, { codeFrameColumns } from "../lib/index.js";
-const codeFrame = _codeFrame.default || _codeFrame;
+import { codeFrameColumns } from "../lib/index.js";
 
-const compose = (f, g) => v => f(g(v));
+const gutter = input => styleText("gray", input, { validateStream: false });
+const yellow = input => styleText("yellow", input, { validateStream: false });
+const marker = input =>
+  styleText(["red", "bold"], input, { validateStream: false });
+const reset = input => styleText("reset", input, { validateStream: false });
+const cyan = input => styleText("cyan", input, { validateStream: false });
 
 function stubColorSupport(supported) {
-  const originalIsColorSupported = colors.isColorSupported;
+  const original = process.env.FORCE_COLOR;
 
   beforeEach(function () {
-    colors.isColorSupported = supported;
+    process.env.FORCE_COLOR = supported ? "" : "false";
   });
 
   afterEach(function () {
-    colors.isColorSupported = originalIsColorSupported;
+    process.env.FORCE_COLOR = original;
   });
 }
 
@@ -24,32 +27,36 @@ describe("highlight", function () {
 
     test("opts.highlightCode", function () {
       const rawLines = "console.log('babel')";
-      const result = codeFrame(rawLines, 1, 9, { highlightCode: true });
-      const stripped = stripAnsi(result);
+      const result = codeFrameColumns(
+        rawLines,
+        { start: { line: 1, column: 8 } },
+        { highlightCode: true },
+      );
+      const stripped = stripVTControlCharacters(result);
       expect(result.length).toBeGreaterThan(stripped.length);
       expect(stripped).toEqual(
         ["> 1 | console.log('babel')", "    |         ^"].join("\n"),
       );
 
       const codeResult = result.match(/console.*?babel/)[0];
-      const codeStripped = stripAnsi(codeResult);
+      const codeStripped = stripVTControlCharacters(codeResult);
       expect(codeResult.length).toBeGreaterThan(codeStripped.length);
     });
 
     test("opts.highlightCode with multiple columns and lines", function () {
       // prettier-ignore
       const rawLines = [
-      "function a(b, c) {",
-      "  return b + c;",
-      "}"
-    ].join("\n");
+        "function a(b, c) {",
+        "  return b + c;",
+        "}"
+      ].join("\n");
 
       const result = codeFrameColumns(
         rawLines,
         {
           start: {
             line: 1,
-            column: 1,
+            column: 0,
           },
           end: {
             line: 3,
@@ -61,7 +68,7 @@ describe("highlight", function () {
           message: "Message about things",
         },
       );
-      const stripped = stripAnsi(result);
+      const stripped = stripVTControlCharacters(result);
       expect(result.length).toBeGreaterThan(stripped.length);
       expect(stripped).toEqual(
         // prettier-ignore
@@ -77,18 +84,19 @@ describe("highlight", function () {
     });
 
     test("opts.forceColor", function () {
-      const marker = compose(colors.red, colors.bold);
-      const gutter = colors.gray;
-
       const rawLines = ["", "", "", ""].join("\n");
       expect(
-        codeFrame(rawLines, 3, null, {
-          linesAbove: 1,
-          linesBelow: 1,
-          forceColor: true,
-        }),
+        codeFrameColumns(
+          rawLines,
+          { start: { line: 3, column: null } },
+          {
+            linesAbove: 1,
+            linesBelow: 1,
+            forceColor: true,
+          },
+        ),
       ).toEqual(
-        colors.reset(
+        reset(
           [
             " " + gutter(" 2 |"),
             marker(">") + gutter(" 3 |"),
@@ -99,22 +107,23 @@ describe("highlight", function () {
     });
 
     test("jsx", function () {
-      const gutter = colors.gray;
-      const yellow = colors.yellow;
-
       const rawLines = ["<div />"].join("\n");
 
       expect(
         JSON.stringify(
-          codeFrame(rawLines, 0, null, {
-            linesAbove: 1,
-            linesBelow: 1,
-            forceColor: true,
-          }),
+          codeFrameColumns(
+            rawLines,
+            { start: { line: 0, column: null } },
+            {
+              linesAbove: 1,
+              linesBelow: 1,
+              forceColor: true,
+            },
+          ),
         ),
       ).toEqual(
         JSON.stringify(
-          colors.reset(
+          reset(
             " " +
               gutter(" 1 |") +
               " " +
@@ -127,6 +136,39 @@ describe("highlight", function () {
         ),
       );
     });
+
+    it("unicode capitalized", function () {
+      const rawLines = ["var 𐐔𐐯𐑅𐐨𐑉𐐯𐐻, deseret;"].join("\n");
+
+      expect(
+        JSON.stringify(
+          codeFrameColumns(
+            rawLines,
+            { start: { line: 0, column: null } },
+            {
+              linesAbove: 1,
+              linesBelow: 1,
+              forceColor: true,
+            },
+          ),
+        ),
+      ).toEqual(
+        JSON.stringify(
+          reset(
+            " " +
+              gutter(" 1 |") +
+              " " +
+              cyan("var") +
+              " " +
+              yellow("𐐔𐐯𐑅𐐨𐑉𐐯𐐻") +
+              yellow(",") +
+              " " +
+              "deseret" +
+              yellow(";"),
+          ),
+        ),
+      );
+    });
   });
 
   describe("when colors are not supported", () => {
@@ -134,8 +176,12 @@ describe("highlight", function () {
 
     test("opts.highlightCode", function () {
       const rawLines = "console.log('babel')";
-      const result = codeFrame(rawLines, 1, 9, { highlightCode: true });
-      const stripped = stripAnsi(result);
+      const result = codeFrameColumns(
+        rawLines,
+        { start: { line: 1, column: 8 } },
+        { highlightCode: true },
+      );
+      const stripped = stripVTControlCharacters(result);
       expect(result).toBe(stripped);
       expect(stripped).toEqual(
         ["> 1 | console.log('babel')", "    |         ^"].join("\n"),
@@ -143,18 +189,19 @@ describe("highlight", function () {
     });
 
     test("opts.forceColor", function () {
-      const marker = compose(colors.red, colors.bold);
-      const gutter = colors.gray;
-
       const rawLines = ["", "", "", ""].join("\n");
       expect(
-        codeFrame(rawLines, 3, null, {
-          linesAbove: 1,
-          linesBelow: 1,
-          forceColor: true,
-        }),
+        codeFrameColumns(
+          rawLines,
+          { start: { line: 3, column: null } },
+          {
+            linesAbove: 1,
+            linesBelow: 1,
+            forceColor: true,
+          },
+        ),
       ).toEqual(
-        colors.reset(
+        reset(
           [
             " " + gutter(" 2 |"),
             marker(">") + gutter(" 3 |"),

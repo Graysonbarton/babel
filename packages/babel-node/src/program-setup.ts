@@ -1,10 +1,8 @@
 import * as commander from "commander";
 
-export const program = process.env.BABEL_8_BREAKING
-  ? commander.program
-  : commander.default.program;
+export const program = commander.program;
 
-function collect(value: unknown, previousValue: string[]): Array<string> {
+function collect(value: unknown, previousValue: string[]): string[] {
   // If the user passed the option with no value, like "babel-node file.js --presets", do nothing.
   if (typeof value !== "string") return previousValue;
 
@@ -56,12 +54,10 @@ program.option(
 );
 program.option("-w, --plugins [string]", "", collect);
 program.option("-b, --presets [string]", "", collect);
-
-if (!process.env.BABEL_8_BREAKING) {
-  // This is only needed in Babel 7, because for Babel 8
-  // we are always passing user arguments after --
-  program.allowUnknownOption(true);
-}
+program.argument(
+  "[arguments...]",
+  "Path to the script for evaluation or arguments passed to the script.",
+);
 
 program.version(PACKAGE_JSON.version);
 program.usage(`[options] [ -e "script" | script.js ] [--] [arguments]`);

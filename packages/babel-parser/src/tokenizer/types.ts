@@ -1,4 +1,3 @@
-import { types as tc, type TokContext } from "./context.ts";
 // ## Token types
 
 // The assignment of fine-grained, information-carrying type objects
@@ -57,11 +56,6 @@ export class ExportedTokenType {
   prefix: boolean;
   postfix: boolean;
   binop: number | undefined | null;
-  // todo(Babel 8): remove updateContext from exposed token layout
-  declare updateContext:
-    | ((context: Array<TokContext>) => void)
-    | undefined
-    | null;
 
   constructor(label: string, conf: TokenOptions = {}) {
     this.label = label;
@@ -74,9 +68,6 @@ export class ExportedTokenType {
     this.prefix = !!conf.prefix;
     this.postfix = !!conf.postfix;
     this.binop = conf.binop != null ? conf.binop : null;
-    if (!process.env.BABEL_8_BREAKING) {
-      this.updateContext = null;
-    }
   }
 }
 
@@ -139,13 +130,9 @@ export type InternalTokenTypes = typeof tt;
 export const tt = {
   // Punctuation token types.
   bracketL: createToken("[", { beforeExpr, startsExpr }),
-  bracketHashL: createToken("#[", { beforeExpr, startsExpr }),
-  bracketBarL: createToken("[|", { beforeExpr, startsExpr }),
   bracketR: createToken("]"),
-  bracketBarR: createToken("|]"),
   braceL: createToken("{", { beforeExpr, startsExpr }),
   braceBarL: createToken("{|", { beforeExpr, startsExpr }),
-  braceHashL: createToken("#{", { beforeExpr, startsExpr }),
   braceR: createToken("}"),
   braceBarR: createToken("|}"),
   parenL: createToken("(", { beforeExpr, startsExpr }),
@@ -330,14 +317,12 @@ export const tt = {
   name: createToken("name", { startsExpr }),
 
   // placeholder plugin
-  placeholder: createToken("%%", { startsExpr: true }),
+  placeholder: createToken("%%", { startsExpr }),
   // end: isIdentifier
 
   string: createToken("string", { startsExpr }),
   num: createToken("num", { startsExpr }),
   bigint: createToken("bigint", { startsExpr }),
-  // TODO: Remove this in Babel 8
-  decimal: createToken("decimal", { startsExpr }),
   // end: isLiteralPropertyName
   regexp: createToken("regexp", { startsExpr }),
   privateName: createToken("#name", { startsExpr }),
@@ -345,8 +330,8 @@ export const tt = {
 
   // jsx plugin
   jsxName: createToken("jsxName"),
-  jsxText: createToken("jsxText", { beforeExpr: true }),
-  jsxTagStart: createToken("jsxTagStart", { startsExpr: true }),
+  jsxText: createToken("jsxText", { beforeExpr }),
+  jsxTagStart: createToken("jsxTagStart", { startsExpr }),
   jsxTagEnd: createToken("jsxTagEnd"),
 } as const;
 
@@ -365,7 +350,7 @@ export function tokenIsKeywordOrIdentifier(token: TokenType): boolean {
 }
 
 export function tokenIsLiteralPropertyName(token: TokenType): boolean {
-  return token >= tt._in && token <= tt.decimal;
+  return token >= tt._in && token <= tt.bigint;
 }
 
 export function tokenComesBeforeExpression(token: TokenType): boolean {
@@ -438,29 +423,4 @@ export function getExportedToken(token: TokenType): ExportedTokenType {
 
 export function isTokenType(obj: any): boolean {
   return typeof obj === "number";
-}
-
-if (!process.env.BABEL_8_BREAKING) {
-  tokenTypes[tt.braceR].updateContext = context => {
-    context.pop();
-  };
-
-  tokenTypes[tt.braceL].updateContext =
-    tokenTypes[tt.braceHashL].updateContext =
-    tokenTypes[tt.dollarBraceL].updateContext =
-      context => {
-        context.push(tc.brace);
-      };
-
-  tokenTypes[tt.backQuote].updateContext = context => {
-    if (context[context.length - 1] === tc.template) {
-      context.pop();
-    } else {
-      context.push(tc.template);
-    }
-  };
-
-  tokenTypes[tt.jsxTagStart].updateContext = context => {
-    context.push(tc.j_expr, tc.j_oTag);
-  };
 }
